@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# 环境变量与密钥
+.env
+.env.local
+*.pem
+
+# 本地数据库（含个人数据，勿提交）
+backend/couple.db
+
+# 用户上传文件（勿提交）
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# 编辑器与系统
+.idea/
+.vscode/
+*.swp
+.DS_Store
