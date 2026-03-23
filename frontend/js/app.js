@@ -3,33 +3,170 @@
  * API 基地址：同源则用相对路径 /api
  */
 const API = '/api';
+const TOKEN_KEY = 'couple_jwt_token';
+let authToken = localStorage.getItem(TOKEN_KEY) || '';
+let currentUser = null;
 
-function get(url) {
-  return fetch(API + url).then((r) => {
-    if (!r.ok) throw new Error(r.statusText);
+function authHeaders(extra = {}) {
+  const headers = { ...extra };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  return headers;
+}
+
+function request(url, options = {}) {
+  const opts = { ...options, headers: authHeaders(options.headers || {}) };
+  return fetch(API + url, opts).then(async (r) => {
+    if (r.status === 401) {
+      clearAuth();
+      showAuthPanel();
+      throw new Error('请先登录');
+    }
+    if (!r.ok) {
+      let msg = r.statusText || '请求失败';
+      try {
+        const err = await r.json();
+        if (err && err.detail) msg = typeof err.detail === 'string' ? err.detail : msg;
+      } catch (_) {}
+      throw new Error(msg);
+    }
+    if (r.status === 204) return null;
     return r.json();
   });
 }
 
+function get(url) {
+  return request(url);
+}
+
 function post(url, body) {
-  return fetch(API + url, {
+  return request(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).then((r) => {
-    if (!r.ok) throw new Error(r.statusText);
-    return r.json();
   });
 }
 
 function postForm(url, formData) {
-  return fetch(API + url, {
+  return request(url, {
     method: 'POST',
     body: formData,
-  }).then((r) => {
-    if (!r.ok) throw new Error(r.statusText);
-    return r.json();
   });
+}
+
+function saveAuth(token, user) {
+  authToken = token || '';
+  currentUser = user || null;
+  localStorage.setItem(TOKEN_KEY, authToken);
+}
+
+function clearAuth() {
+  authToken = '';
+  currentUser = null;
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+function showAuthPanel() {
+  const authPanel = document.getElementById('authPanel');
+  const appShell = document.getElementById('appShell');
+  const loginCard = document.getElementById('loginCard');
+  const registerCard = document.getElementById('registerCard');
+  if (authPanel) authPanel.style.display = '';
+  if (appShell) appShell.style.display = 'none';
+  if (loginCard) loginCard.classList.add('is-active');
+  if (registerCard) registerCard.classList.remove('is-active');
+}
+
+function showAppPanel() {
+  const authPanel = document.getElementById('authPanel');
+  const appShell = document.getElementById('appShell');
+  if (authPanel) authPanel.style.display = 'none';
+  if (appShell) appShell.style.display = '';
+  const welcomeText = document.getElementById('welcomeText');
+  if (welcomeText && currentUser) {
+    welcomeText.textContent = `欢迎回来，${currentUser.username}。记录在一起的每一天`;
+  }
+}
+
+function initAuthForms() {
+  const loginCard = document.getElementById('loginCard');
+  const registerCard = document.getElementById('registerCard');
+  const toRegisterBtn = document.getElementById('toRegisterBtn');
+  const toLoginBtn = document.getElementById('toLoginBtn');
+
+  function showRegisterCard() {
+    if (loginCard) {
+      loginCard.classList.remove('is-active');
+      loginCard.style.display = 'none';
+    }
+    if (registerCard) {
+      registerCard.classList.add('is-active');
+      registerCard.style.display = 'block';
+    }
+  }
+
+  function showLoginCard() {
+    if (registerCard) {
+      registerCard.classList.remove('is-active');
+      registerCard.style.display = 'none';
+    }
+    if (loginCard) {
+      loginCard.classList.add('is-active');
+      loginCard.style.display = 'block';
+    }
+  }
+
+  // 初始化时强制只显示登录卡片，避免缓存旧样式导致双卡片同屏。
+  showLoginCard();
+
+  if (toRegisterBtn) toRegisterBtn.addEventListener('click', showRegisterCard);
+  if (toLoginBtn) toLoginBtn.addEventListener('click', showLoginCard);
+
+  const loginForm = document.getElementById('formLogin');
+  if (loginForm) {
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fd = new FormData(loginForm);
+      const body = {
+        username: String(fd.get('username') || '').trim(),
+        password: String(fd.get('password') || ''),
+      };
+      post('/auth/login', body)
+        .then((data) => {
+          saveAuth(data.access_token, data.user);
+          showAppPanel();
+          initApp();
+        })
+        .catch((err) => alert('登录失败：' + (err.message || '请稍后再试')));
+    });
+  }
+
+  const registerForm = document.getElementById('formRegister');
+  if (registerForm) {
+    registerForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fd = new FormData(registerForm);
+      const body = {
+        username: String(fd.get('username') || '').trim(),
+        password: String(fd.get('password') || ''),
+      };
+      post('/auth/register', body)
+        .then(() => post('/auth/login', { username: body.username, password: body.password }))
+        .then((data) => {
+          saveAuth(data.access_token, data.user);
+          showAppPanel();
+          initApp();
+        })
+        .catch((err) => alert('注册失败：' + (err.message || '请稍后再试')));
+    });
+  }
+
+  const logoutBtn = document.getElementById('btnLogout');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      clearAuth();
+      showAuthPanel();
+    });
+  }
 }
 
 // ---------- 我们在一起第 N 天 ----------
@@ -428,7 +565,17 @@ function initTabs() {
 }
 
 // ---------- 入口 ----------
-function init() {
+let appInited = false;
+function initApp() {
+  if (appInited) {
+    renderHero();
+    renderAnniversaries();
+    renderMemories();
+    renderGallery();
+    renderNotes();
+    return;
+  }
+  appInited = true;
   initTabs();
   initAddAnniversary();
   initAddMemory();
@@ -442,6 +589,24 @@ function init() {
   renderNotes();
 }
 
+function init() {
+  initAuthForms();
+  if (!authToken) {
+    showAuthPanel();
+    return;
+  }
+  get('/auth/me')
+    .then((me) => {
+      currentUser = me;
+      showAppPanel();
+      initApp();
+    })
+    .catch(() => {
+      clearAuth();
+      showAuthPanel();
+    });
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
@@ -450,5 +615,5 @@ if (document.readyState === 'loading') {
 
 // PWA：注册 Service Worker
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js?v=20260323-2').catch(() => {});
 }

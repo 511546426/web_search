@@ -5,20 +5,21 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Note
+from app.models import Note, User
 from app.schemas import NoteCreate, NoteResponse
+from app.security import get_current_user
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
 
 @router.get("", response_model=List[NoteResponse])
-def list_notes(db: Session = Depends(get_db)):
-    return db.query(Note).order_by(Note.created_at.desc()).all()
+def list_notes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(Note).filter(Note.owner_id == current_user.id).order_by(Note.created_at.desc()).all()
 
 
 @router.post("", response_model=NoteResponse)
-def create_note(body: NoteCreate, db: Session = Depends(get_db)):
-    n = Note(content=body.content, is_public=body.is_public)
+def create_note(body: NoteCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    n = Note(content=body.content, is_public=body.is_public, owner_id=current_user.id)
     db.add(n)
     db.commit()
     db.refresh(n)
@@ -26,16 +27,16 @@ def create_note(body: NoteCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{note_id}", response_model=NoteResponse)
-def get_note(note_id: int, db: Session = Depends(get_db)):
-    n = db.query(Note).filter(Note.id == note_id).first()
+def get_note(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    n = db.query(Note).filter(Note.id == note_id, Note.owner_id == current_user.id).first()
     if not n:
         raise HTTPException(status_code=404, detail="悄悄话不存在")
     return n
 
 
 @router.delete("/{note_id}", status_code=204)
-def delete_note(note_id: int, db: Session = Depends(get_db)):
-    n = db.query(Note).filter(Note.id == note_id).first()
+def delete_note(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    n = db.query(Note).filter(Note.id == note_id, Note.owner_id == current_user.id).first()
     if not n:
         raise HTTPException(status_code=404, detail="悄悄话不存在")
     db.delete(n)

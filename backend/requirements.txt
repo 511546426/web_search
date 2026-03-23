@@ -1,3 +1,4 @@
+# 需要 Python 3.10+（至少 3.8+）；系统自带 python3.6 无法安装下列版本
 fastapi==0.109.2
 uvicorn[standard]==0.27.1
 sqlalchemy==2.0.25
@@ -5,3 +6,5 @@ aiosqlite==0.19.0
 python-multipart==0.0.9
 pydantic==2.6.1
 pydantic-settings==2.1.0
+python-jose==3.3.0
+passlib==1.7.4

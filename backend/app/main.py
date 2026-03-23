@@ -12,8 +12,9 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app.database import get_db, init_db
-from app.models import Anniversary
-from app.routers import anniversaries, memories, notes, photos
+from app.models import Anniversary, User
+from app.routers import anniversaries, memories, notes, photos, auth
+from app.security import get_current_user
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_DIR = os.path.join(BACKEND_DIR, "uploads")
@@ -46,6 +47,7 @@ app.include_router(memories.router)
 app.include_router(anniversaries.router)
 app.include_router(photos.router)
 app.include_router(notes.router)
+app.include_router(auth.router)
 
 
 @app.get("/api/health")
@@ -60,9 +62,9 @@ def today_in_history():
 
 
 @app.get("/api/stats")
-def stats(db: Session = Depends(get_db)):
+def stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """我们在一起第 N 天：取最早的一个纪念日计算."""
-    first = db.query(Anniversary).order_by(Anniversary.date.asc()).first()
+    first = db.query(Anniversary).filter(Anniversary.owner_id == current_user.id).order_by(Anniversary.date.asc()).first()
     if not first:
         return {"days_together": None, "message": "还没有添加纪念日哦"}
     delta = date.today() - first.date

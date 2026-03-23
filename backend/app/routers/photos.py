@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Photo
+from app.models import Photo, User
 from app.schemas import PhotoUpdate, PhotoResponse
+from app.security import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +54,27 @@ async def _save_upload(file: UploadFile) -> str:
 
 
 @router.get("", response_model=List[PhotoResponse])
-def list_photos(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
-    return db.query(Photo).order_by(Photo.taken_at.desc()).offset(skip).limit(limit).all()
+def list_photos(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return (
+        db.query(Photo)
+        .filter(Photo.owner_id == current_user.id)
+        .order_by(Photo.taken_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.post("", response_model=PhotoResponse)
 async def upload_photo(
     request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     try:
         form = await _get_upload_form(request)
@@ -73,7 +87,7 @@ async def upload_photo(
         else:
             description = None
         filename = await _save_upload(file)
-        p = Photo(filename=filename, description=description)
+        p = Photo(filename=filename, description=description, owner_id=current_user.id)
         db.add(p)
         db.commit()
         db.refresh(p)
@@ -89,16 +103,21 @@ async def upload_photo(
 
 
 @router.get("/{photo_id}", response_model=PhotoResponse)
-def get_photo(photo_id: int, db: Session = Depends(get_db)):
-    p = db.query(Photo).filter(Photo.id == photo_id).first()
+def get_photo(photo_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = db.query(Photo).filter(Photo.id == photo_id, Photo.owner_id == current_user.id).first()
     if not p:
         raise HTTPException(status_code=404, detail="照片不存在")
     return p
 
 
 @router.patch("/{photo_id}", response_model=PhotoResponse)
-def update_photo(photo_id: int, body: PhotoUpdate, db: Session = Depends(get_db)):
-    p = db.query(Photo).filter(Photo.id == photo_id).first()
+def update_photo(
+    photo_id: int,
+    body: PhotoUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    p = db.query(Photo).filter(Photo.id == photo_id, Photo.owner_id == current_user.id).first()
     if not p:
         raise HTTPException(status_code=404, detail="照片不存在")
     for k, v in body.model_dump(exclude_unset=True).items():
@@ -109,8 +128,8 @@ def update_photo(photo_id: int, body: PhotoUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/{photo_id}", status_code=204)
-def delete_photo(photo_id: int, db: Session = Depends(get_db)):
-    p = db.query(Photo).filter(Photo.id == photo_id).first()
+def delete_photo(photo_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = db.query(Photo).filter(Photo.id == photo_id, Photo.owner_id == current_user.id).first()
     if not p:
         raise HTTPException(status_code=404, detail="照片不存在")
     db.delete(p)

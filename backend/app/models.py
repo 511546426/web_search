@@ -1,8 +1,19 @@
 """情侣记录站 · 数据模型."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Date
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Date, ForeignKey
 
 from app.database import Base
+
+
+class User(Base):
+    """用户账号."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(120), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Memory(Base):
@@ -16,6 +27,7 @@ class Memory(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     image_url = Column(String(500), nullable=True)  # 可选头图
     mood = Column(String(50), nullable=True)  # 心情标签：开心/感动/搞笑...
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
 
 class Anniversary(Base):
@@ -27,6 +39,7 @@ class Anniversary(Base):
     date = Column(Date, nullable=False)  # 纪念日期
     repeat_yearly = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
 
 class Photo(Base):
@@ -38,6 +51,7 @@ class Photo(Base):
     description = Column(Text, nullable=True)
     taken_at = Column(DateTime, default=datetime.utcnow)  # 拍摄/记录时间
     created_at = Column(DateTime, default=datetime.utcnow)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
 
 class Note(Base):
@@ -48,3 +62,4 @@ class Note(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_public = Column(Boolean, default=True)  # True=都可见
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)

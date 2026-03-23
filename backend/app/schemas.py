@@ -5,6 +5,29 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    created_at: datetime
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+
+
 # ----- Memory -----
 class MemoryCreate(BaseModel):
     title: Optional[str] = None

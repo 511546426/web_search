@@ -50,6 +50,64 @@ body::before {
   padding-bottom: 4rem;
 }
 
+.auth-card {
+  display: none;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: 0 4px 20px var(--shadow);
+  margin-bottom: 1rem;
+}
+
+.auth-card.is-active {
+  display: block;
+}
+
+.auth-form label {
+  display: block;
+  margin-bottom: 0.9rem;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.auth-form input[type="text"],
+.auth-form input[type="password"] {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--blush);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.auth-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.auth-switch {
+  margin-top: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  text-align: right;
+}
+
+.auth-link {
+  background: none;
+  border: none;
+  color: var(--rose-deep);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
+}
+
 /* 头部 */
 header {
   text-align: center;
