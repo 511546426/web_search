@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>漫剧管理面板</title>
+<link rel="stylesheet" href="/css/comic-admin.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>漫剧视频管理面板</h1>
+    <div class="stats-bar" id="statsBar">加载中...</div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="scripts">剧本列表</button>
+    <button class="tab" data-tab="videos">视频队列</button>
+    <button class="tab" data-tab="publish">发布管理</button>
+  </nav>
+
+  <!-- 操作区 -->
+  <section class="actions">
+    <div class="action-group">
+      <input type="text" id="topicInput" placeholder="输入主题（留空则自动抓取热点）" style="flex:1">
+      <button id="triggerBtn" class="btn btn-primary">手动触发生成</button>
+      <button id="triggerBatchBtn" class="btn btn-secondary">批量生成 (3个)</button>
+    </div>
+    <div class="action-group">
+      <select id="platformFilter">
+        <option value="">全部平台</option>
+        <option value="weibo">微博</option>
+        <option value="douyin">抖音</option>
+        <option value="bilibili">B站</option>
+      </select>
+      <button id="refreshBtn" class="btn btn-outline">刷新</button>
+      <button id="scrapeTrendingBtn" class="btn btn-outline">查看当前热点</button>
+    </div>
+  </section>
+
+  <!-- 剧本列表 -->
+  <section class="panel active" id="scriptsPanel">
+    <div class="card-list" id="scriptList"></div>
+  </section>
+
+  <!-- 视频队列 -->
+  <section class="panel" id="videosPanel">
+    <div class="card-list" id="videoList"></div>
+  </section>
+
+  <!-- 发布管理 -->
+  <section class="panel" id="publishPanel">
+    <div class="card-list" id="publishList"></div>
+  </section>
+
+  <!-- 热点展示 -->
+  <section class="panel" id="trendingPanel">
+    <h2>当前热点话题</h2>
+    <div class="card-list" id="trendingList"></div>
+  </section>
+
+  <!-- 剧本详情 Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">剧本详情</h2>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/comic-admin.js"></script>
+</body>
+</html>

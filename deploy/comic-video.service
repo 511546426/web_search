@@ -1,0 +1,17 @@
+[Unit]
+Description=Comic Video Generation Service
+After=network.target
+
+[Service]
+Type=simple
+User=newuser
+WorkingDirectory=/home/newuser/project/web_search/web_search/backend
+EnvironmentFile=/home/newuser/project/web_search/web_search/.env
+ExecStart=/home/newuser/project/web_search/web_search/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

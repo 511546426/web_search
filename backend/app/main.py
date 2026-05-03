@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db, init_db
 from app.models import Anniversary, User
-from app.routers import anniversaries, memories, notes, photos, auth
+from app.routers import anniversaries, memories, notes, photos, auth, comic_videos
 from app.security import get_current_user
+from app.tasks.scheduler import start_scheduler, stop_scheduler
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_DIR = os.path.join(BACKEND_DIR, "uploads")
@@ -25,7 +26,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 app = FastAPI(
@@ -48,6 +51,7 @@ app.include_router(anniversaries.router)
 app.include_router(photos.router)
 app.include_router(notes.router)
 app.include_router(auth.router)
+app.include_router(comic_videos.router)
 
 
 @app.get("/api/health")
