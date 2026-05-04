@@ -114,6 +114,7 @@ class ProductInfoRequest(BaseModel):
     style_preference: str = ""  # 风格偏好
     photo_ids: list[str] = []  # 上传的图片文件名列表
     visual_style: str = "realistic"  # 动漫/真人
+    showcase_style: str = "story"  # story（剧情带货）/ visual（视觉展示）
 
 class ProductAdScriptResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -146,6 +146,7 @@ async function loadScripts () {
         <div class="card-actions">
           <button class="btn btn-outline btn-sm" onclick="viewScript(${s.id})">查看</button>
           <button class="btn btn-secondary btn-sm" onclick="generateWithReview(${s.id}, 'script')" ${s.status === 'generating_video' ? 'disabled' : ''}>生成视频</button>
+          <button class="btn btn-sm" style="background:transparent;border:1px solid var(--danger);color:var(--danger);padding:6px 8px;" onclick="deleteScript(${s.id})" title="删除">✕</button>
         </div>
       </div>
     `).join('');
@@ -176,6 +177,7 @@ async function loadVideos () {
         <div class="card-actions">
           ${v.file_path ? '<button class="btn btn-outline btn-sm" onclick="previewVideo(\'' + escHtml(v.file_path) + '\')">预览</button>' : ''}
           <button class="btn btn-success btn-sm" onclick="publishVideo(${v.id})" ${v.status !== 'completed' ? 'disabled' : ''}>标记发布</button>
+          <button class="btn btn-sm" style="background:transparent;border:1px solid var(--danger);color:var(--danger);padding:6px 8px;" onclick="deleteVideo(${v.id})" title="删除">✕</button>
         </div>
       </div>
     `).join('');
@@ -331,6 +333,30 @@ function previewVideo (path) {
   window.open(videoUrl, '_blank');
 }
 
+// ---- 删除 ----
+async function deleteScript (id) {
+  if (!confirm('确定删除剧本 #' + id + '？（关联视频也将删除）')) return;
+  try {
+    await api(API + '/scripts/' + id, { method: 'DELETE' });
+    loadScripts(); loadStats();
+  } catch (e) { alert('删除失败: ' + e.message); }
+}
+
+async function deleteVideo (id) {
+  if (!confirm('确定删除视频 #' + id + '？')) return;
+  try {
+    await api(API + '/videos/' + id, { method: 'DELETE' });
+    loadVideos(); loadStats();
+  } catch (e) { alert('删除失败: ' + e.message); }
+}
+
+async function deleteProductAd (id) {
+  if (!confirm('确定删除带货剧本 #' + id + '？')) return;
+  try {
+    await api(API + '/product-ad/' + id, { method: 'DELETE' });
+    loadProductAds(); loadStats();
+  } catch (e) { alert('删除失败: ' + e.message); }
+}
 // ---- 商品带货 ----
 
 // 选择照片
@@ -370,11 +396,66 @@ $('#uploadPhotosBtn').addEventListener('click', async () => {
     if (!res.ok) throw new Error(data.detail || '上传失败');
     uploadedPhotoIds = data.photo_ids;
     alert(`上传成功 ${data.count} 张图片`);
-    $('#generateAdScriptBtn').disabled = false;
+    // 照片上传后可立即生成剧本，但名称已填写时也可生成
+    if ($('#prodName').value.trim()) {
+      $('#generateAdScriptBtn').disabled = false;
+    }
   } catch (e) {
     alert('上传失败: ' + e.message);
   }
   btn.disabled = false; btn.textContent = '上传';
+});
+
+// 选择视频
+$('#selectVideoBtn').addEventListener('click', () => $('#productVideoInput').click());
+$('#productVideoInput').addEventListener('change', (e) => {
+  const files = e.target.files;
+  if (!files || !files.length) return;
+  $('#videoName').textContent = files[0].name;
+  $('#uploadVideoBtn').disabled = false;
+});
+
+// 上传视频并抽帧
+$('#uploadVideoBtn').addEventListener('click', async () => {
+  const input = $('#productVideoInput');
+  const file = input.files[0];
+  if (!file) { alert('请先选择视频'); return; }
+  const btn = $('#uploadVideoBtn');
+  btn.disabled = true; btn.textContent = '抽帧中...';
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(API + '/product-ad/upload-video', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '抽帧失败');
+    // 合并到已上传的图片列表中
+    uploadedPhotoIds = [...uploadedPhotoIds, ...data.photo_ids];
+    // 展示抽帧结果缩略图
+    const preview = $('#photoPreview');
+    for (const pid of data.photo_ids) {
+      const img = document.createElement('img');
+      img.src = '/uploads/product_photos/' + pid;
+      img.className = 'photo-thumb';
+      img.title = `视频帧: ${pid}`;
+      preview.appendChild(img);
+    }
+    alert(`视频「${data.source_video}」抽帧完成，获得 ${data.count} 张参考图`);
+    if ($('#prodName').value.trim()) {
+      $('#generateAdScriptBtn').disabled = false;
+    }
+  } catch (e) {
+    alert('视频处理失败: ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '上传并抽帧';
+});
+
+// 商品名称输入后自动启用生成按钮
+$('#prodName').addEventListener('input', () => {
+  if ($('#prodName').value.trim()) {
+    $('#generateAdScriptBtn').disabled = false;
+  } else {
+    $('#generateAdScriptBtn').disabled = true;
+  }
 });
 
 // 生成带货剧本
@@ -393,6 +474,7 @@ $('#generateAdScriptBtn').addEventListener('click', async () => {
         selling_points: $('#prodSellingPoints').value.trim(),
         target_audience: $('#prodAudience').value.trim(),
         visual_style: $('#prodVisualStyle').value,
+        showcase_style: $('#prodShowcaseStyle').value,
         photo_ids: uploadedPhotoIds,
       })
     });
@@ -432,6 +514,7 @@ async function loadProductAds () {
         <div class="card-actions">
           <button class="btn btn-outline btn-sm" onclick="viewProductAd(${a.id})">查看</button>
           <button class="btn btn-secondary btn-sm" onclick="generateWithReview(${a.id}, 'product')" ${a.status === 'generating_video' || a.status === 'video_done' ? 'disabled' : ''}>生成视频</button>
+          <button class="btn btn-sm" style="background:transparent;border:1px solid var(--danger);color:var(--danger);padding:6px 8px;" onclick="deleteProductAd(${a.id})" title="删除">✕</button>
         </div>
       </div>`;
     }).join('');
@@ -445,6 +528,7 @@ async function viewProductAd (id) {
     const content = ad.script_content ? JSON.parse(ad.script_content) : {};
     const photos = ad.photo_ids ? JSON.parse(ad.photo_ids) : [];
     const prodInfo = ad.product_info ? JSON.parse(ad.product_info) : {};
+    const isVisual = content.showcase_style === 'visual';
 
     let photoHtml = '';
     if (photos.length) {
@@ -453,16 +537,30 @@ async function viewProductAd (id) {
         '</div>';
     }
 
+    const scenes = content.scenes || content.script || [];
+    let scenesHtml = '';
+    if (isVisual) {
+      scenesHtml = '<h3>分镜展示</h3>' + scenes.map(s => `
+        <div style="background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;margin-bottom:8px;">
+          <strong>场景 ${s.scene}</strong>
+          <p><strong>镜头:</strong> ${escHtml(s.camera_angle || '')}</p>
+          <p><strong>动作:</strong> ${escHtml(s.action || '')}</p>
+          <p><strong>产品展示:</strong> ${escHtml(s.product_focus || '')}</p>
+        </div>
+      `).join('');
+    }
+
     $('#adModalTitle').textContent = ad.title;
     $('#adModalBody').innerHTML = `
       <p><strong>商品:</strong> ${escHtml(prodInfo.name || content.product || '')} | <strong>品类:</strong> ${escHtml(prodInfo.category || '')}</p>
       <p><strong>状态:</strong> ${statusLabel(ad.status)}</p>
+      ${content.showcase_style ? '<p><span class="tag">' + (isVisual ? '视觉展示' : '剧情带货') + '</span></p>' : ''}
       ${prodInfo.description ? '<p><strong>描述:</strong> ' + escHtml(prodInfo.description) + '</p>' : ''}
       ${prodInfo.selling_points ? '<p><strong>卖点:</strong> ' + escHtml(prodInfo.selling_points) + '</p>' : ''}
       ${content.characters ? renderCharacters(content.characters) : ''}
+      ${content.background_music ? '<p><strong>背景音乐:</strong> ' + escHtml(content.background_music) + '</p>' : ''}
       ${photoHtml}
-      <h3>带货剧本</h3>
-      <pre>${escHtml(JSON.stringify(content.script || content, null, 2))}</pre>
+      ${isVisual ? scenesHtml : '<h3>带货剧本</h3><pre>' + escHtml(JSON.stringify(scenes, null, 2)) + '</pre>'}
       ${content.cta ? '<p><strong>行动号召:</strong> ' + escHtml(content.cta) + '</p>' : ''}
       ${ad.video_path ? '<p><a href="/' + escHtml(ad.video_path.replace(/^.*\/backend\//, '')) + '" target="_blank">🎬 查看生成的视频</a></p>' : ''}
     `;

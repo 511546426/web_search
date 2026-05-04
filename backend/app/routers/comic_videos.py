@@ -50,6 +50,18 @@ def get_script(script_id: int, db: Session = Depends(get_db)):
     return s
 
 
+@router.delete("/scripts/{script_id}")
+def delete_script(script_id: int, db: Session = Depends(get_db)):
+    """删除剧本及其关联视频."""
+    s = db.query(ComicScript).filter(ComicScript.id == script_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="剧本不存在")
+    db.query(ComicVideo).filter(ComicVideo.script_id == script_id).delete()
+    db.delete(s)
+    db.commit()
+    return {"message": "已删除", "script_id": script_id}
+
+
 @router.post("/scripts/{script_id}/review")
 def review_script(script_id: int, db: Session = Depends(get_db)):
     """评审剧本质量和可行性."""
@@ -241,6 +253,17 @@ def get_video(video_id: int, db: Session = Depends(get_db)):
     if not v:
         raise HTTPException(status_code=404, detail="视频不存在")
     return v
+
+
+@router.delete("/videos/{video_id}")
+def delete_video(video_id: int, db: Session = Depends(get_db)):
+    """删除视频记录."""
+    v = db.query(ComicVideo).filter(ComicVideo.id == video_id).first()
+    if not v:
+        raise HTTPException(status_code=404, detail="视频不存在")
+    db.delete(v)
+    db.commit()
+    return {"message": "已删除", "video_id": video_id}
 
 
 # ---- 发布 ----

@@ -69,12 +69,18 @@
     <div class="product-upload-area" id="productUploadArea">
       <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
         <div style="flex:1; min-width:280px;">
-          <h3 style="margin-bottom:8px;">① 上传商品照片</h3>
+          <h3 style="margin-bottom:8px;">① 上传商品素材</h3>
           <input type="file" id="productPhotoInput" accept="image/*" multiple style="display:none">
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
             <button id="selectPhotosBtn" class="btn btn-outline">选择照片</button>
             <span id="photoCount" style="color:var(--text-dim); font-size:0.85rem;">未选择</span>
-            <button id="uploadPhotosBtn" class="btn btn-primary" disabled>上传</button>
+            <button id="uploadPhotosBtn" class="btn btn-primary" disabled>上传照片</button>
+          </div>
+          <input type="file" id="productVideoInput" accept="video/*" style="display:none">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+            <button id="selectVideoBtn" class="btn btn-outline">选择视频</button>
+            <span id="videoName" style="color:var(--text-dim); font-size:0.85rem;">未选择视频</span>
+            <button id="uploadVideoBtn" class="btn btn-primary" disabled>上传并抽帧</button>
           </div>
           <div id="photoPreview" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
         </div>
@@ -90,7 +96,12 @@
               <option value="realistic">真人实拍风格</option>
               <option value="anime">动漫风格</option>
             </select>
+            <select id="prodShowcaseStyle" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+              <option value="story">剧情带货（有对白）</option>
+              <option value="visual">视觉展示（无对白·多角度）</option>
+            </select>
             <button id="generateAdScriptBtn" class="btn btn-primary" disabled>③ 生成带货剧本</button>
+            <div style="font-size:0.75rem;color:var(--text-dim);grid-column:1/-1;">* 商品名称必填，其他信息可选，照片/视频选传</div>
           </div>
         </div>
       </div>
