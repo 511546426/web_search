@@ -40,6 +40,7 @@ class ComicScriptResponse(BaseModel):
     genre: Optional[str] = None
     status: str
     tags: Optional[str] = None
+    review_score: Optional[float] = None
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -70,6 +71,22 @@ class PublishLogResponse(BaseModel):
     created_at: datetime
 
 
+class CreateScriptRequest(BaseModel):
+    """手动创建剧本请求."""
+    title: str
+    script_content: str  # JSON 格式的剧本内容
+    genre: Optional[str] = None
+    tags: Optional[str] = None
+    source_topic: Optional[str] = None
+
+
+class ScriptFromTextRequest(BaseModel):
+    """从纯文本转换剧本请求."""
+    text: str  # 用户提供的纯文本剧本
+    visual_style: str = "anime"  # "anime"（动漫）或 "realistic"（真人）
+    source_topic: Optional[str] = None
+
+
 class TriggerRequest(BaseModel):
     topic: Optional[str] = None
     auto_generate_video: bool = True
@@ -83,3 +100,31 @@ class PublishRequest(BaseModel):
 
 class TriggerBatchRequest(BaseModel):
     limit: int = 3
+
+
+# ---- 商品带货 ----
+
+class ProductInfoRequest(BaseModel):
+    """商品信息 + 上传图片 ID 列表."""
+    name: str = ""
+    category: str = ""
+    description: str = ""
+    selling_points: str = ""  # 卖点，逗号分隔
+    target_audience: str = ""  # 目标人群
+    style_preference: str = ""  # 风格偏好
+    photo_ids: list[str] = []  # 上传的图片文件名列表
+    visual_style: str = "realistic"  # 动漫/真人
+
+class ProductAdScriptResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    title: str
+    script_content: str
+    genre: str
+    status: str
+    tags: str
+    product_info: str
+    photo_ids: str
+    review_score: Optional[float] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None

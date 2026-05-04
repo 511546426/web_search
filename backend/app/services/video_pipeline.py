@@ -102,22 +102,24 @@ def _do_generate_video(db, db_script: ComicScript, storyboard: List[Dict], resol
     db_script.status = "generating_video"
     db.commit()
 
-    style_prefix = "2D anime animation, manga art style, Japanese anime aesthetic, vibrant colors, clean lineart, "
+    try:
+        script_data = json.loads(db_script.script_content) if isinstance(db_script.script_content, str) else db_script.script_content
+        est_duration = script_data.get("duration_estimate", 10) if isinstance(script_data, dict) else 10
+        visual_style = script_data.get("visual_style", "anime") if isinstance(script_data, dict) else "anime"
+    except (json.JSONDecodeError, AttributeError):
+        est_duration = 10
+        visual_style = "anime"
+
+    style_prefix = "Realistic, live-action,真人影视, photorealistic, cinematic lighting, detailed textures, " if visual_style == "realistic" else "2D anime animation, manga art style, Japanese anime aesthetic, vibrant colors, clean lineart, "
     combined_prompt = style_prefix + " ".join(
         sb["video_prompt"] for sb in storyboard[:5]
     )[:2000]
 
-    logger.info(f"Creating Seedance video task for script {db_script.id}")
+    logger.info(f"Creating Seedance video task for script {db_script.id} (visual_style={visual_style})")
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     output_path = os.path.join(
         UPLOADS_DIR, f"video_{db_script.id}_{datetime.utcnow():%Y%m%d_%H%M%S}.mp4"
     )
-
-    try:
-        script_data = json.loads(db_script.script_content) if isinstance(db_script.script_content, str) else db_script.script_content
-        est_duration = script_data.get("duration_estimate", 10) if isinstance(script_data, dict) else 10
-    except (json.JSONDecodeError, AttributeError):
-        est_duration = 10
 
     seedance_result = seedance_client.create_and_download(
         prompt=combined_prompt,
@@ -180,6 +182,57 @@ def generate_video_for_script(script_id: int, resolution: str = "720p") -> dict:
     except Exception as e:
         logger.exception(f"Video generation failed for script {script_id}: {e}")
         return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+def generate_video_for_script_with_review(script_id: int, resolution: str = "720p", target_score: float = 8.0) -> dict:
+    """自动评审 + 反复修改直到达标 → 生成视频.
+
+    返回: {"success": bool, "video_id": int|None, "review_result": dict, "error": str}
+    """
+    from app.services.script_writer import auto_review_loop
+
+    db = SessionLocal()
+    try:
+        script = db.query(ComicScript).filter(ComicScript.id == script_id).first()
+        if not script:
+            return {"success": False, "error": "剧本不存在"}
+
+        # 1. 自动评审循环
+        script_content = json.loads(script.script_content) if isinstance(script.script_content, str) else script.script_content
+        loop_result = auto_review_loop(script_content, target_score=target_score)
+
+        # 2. 保存修改后的剧本
+        final_script = loop_result["script"]
+        script.script_content = json.dumps(final_script, ensure_ascii=False)
+        script.title = final_script.get("title", script.title)
+        script.review_score = loop_result["review"].get("overall_score")
+
+        # 3. 重新生成分镜
+        storyboard = generate_storyboard(final_script)
+        script.storyboard_json = json.dumps(storyboard, ensure_ascii=False)
+        db.commit()
+
+        # 4. 生成视频
+        video_result = _do_generate_video(db, script, storyboard, resolution)
+        loop_result["review"]["iterations"] = loop_result["iterations"]
+        loop_result["review"]["achieved_target"] = loop_result["achieved_target"]
+
+        return {
+            "success": True,
+            "video_id": video_result.get("video_id"),
+            "review_result": loop_result["review"],
+            "iterations": loop_result["iterations"],
+            "achieved_target": loop_result["achieved_target"],
+            "error": "",
+        }
+    except SeedanceError as e:
+        logger.error(f"Seedance error for script {script_id}: {e}")
+        return {"success": False, "error": str(e), "review_result": None}
+    except Exception as e:
+        logger.exception(f"Video generation failed for script {script_id}: {e}")
+        return {"success": False, "error": str(e), "review_result": None}
     finally:
         db.close()
 

@@ -1,6 +1,6 @@
 """漫剧视频系统 · 数据模型."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Date, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, Text, Boolean, DateTime, Date, ForeignKey
 
 from app.database import Base
 
@@ -30,6 +30,7 @@ class ComicScript(Base):
         String(30), default="draft", index=True
     )
     tags = Column(Text, nullable=True)
+    review_score = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -51,6 +52,25 @@ class ComicVideo(Base):
     seedance_result = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ProductAd(Base):
+    """商品带货剧本."""
+    __tablename__ = "product_ads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    product_info = Column(Text, nullable=True)  # JSON: 商品基础信息
+    photo_ids = Column(Text, nullable=True)  # JSON: 关联图片文件名列表
+    script_content = Column(Text, nullable=False)  # JSON: 带货剧本
+    genre = Column(String(50), nullable=True)
+    status = Column(String(30), default="draft", index=True)
+    tags = Column(Text, nullable=True)
+    video_path = Column(String(500), nullable=True)
+    review_score = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class PublishLog(Base):

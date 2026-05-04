@@ -1,4 +1,5 @@
 """漫剧视频管理 API."""
+import json
 import os
 import logging
 import threading
@@ -13,7 +14,9 @@ from app.models import ComicScript, ComicVideo, PublishLog
 from app.schemas import (
     ComicScriptResponse,
     ComicVideoResponse,
+    CreateScriptRequest,
     PublishLogResponse,
+    ScriptFromTextRequest,
     TriggerRequest,
     PublishRequest,
     TriggerBatchRequest,
@@ -47,8 +50,97 @@ def get_script(script_id: int, db: Session = Depends(get_db)):
     return s
 
 
+@router.post("/scripts/{script_id}/review")
+def review_script(script_id: int, db: Session = Depends(get_db)):
+    """评审剧本质量和可行性."""
+    from app.services.script_writer import review_script as do_review
+
+    s = db.query(ComicScript).filter(ComicScript.id == script_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="剧本不存在")
+
+    script_content = json.loads(s.script_content) if isinstance(s.script_content, str) else s.script_content
+    result = do_review(script_content)
+    return result
+
+
+@router.post("/scripts", response_model=ComicScriptResponse, status_code=201)
+def create_script(body: CreateScriptRequest, db: Session = Depends(get_db)):
+    """手动创建剧本（自己提供内容，不经过 AI 生成）。"""
+    script = ComicScript(
+        title=body.title,
+        source_topic=body.source_topic,
+        script_content=body.script_content,
+        genre=body.genre or "",
+        status="draft",
+        tags=body.tags or "",
+    )
+    db.add(script)
+    db.commit()
+    db.refresh(script)
+    logger.info(f"Manual script created: id={script.id}, title={script.title}")
+    return script
+
+
+@router.post("/scripts/from-text", status_code=201)
+def create_script_from_text(body: ScriptFromTextRequest, db: Session = Depends(get_db)):
+    """提供纯文本剧本，自动解析为结构化 JSON 并保存，同时自动评审。"""
+    from app.services.script_writer import format_raw_script, review_script
+
+    parsed = format_raw_script(body.text, visual_style=body.visual_style)
+    script_content = json.dumps(parsed, ensure_ascii=False)
+
+    script = ComicScript(
+        title=parsed.get("title", "未命名剧本"),
+        source_topic=body.source_topic or parsed.get("theme", ""),
+        script_content=script_content,
+        genre=parsed.get("genre", ""),
+        status="draft",
+        tags=",".join(parsed.get("tags", [])) if isinstance(parsed.get("tags"), list) else "",
+    )
+    db.add(script)
+    db.commit()
+    db.refresh(script)
+    logger.info(f"Script created from text: id={script.id}, title={script.title}")
+
+    # 自动评审循环（自动修改直到达标 ≥ 8 分）
+    try:
+        from app.services.script_writer import auto_review_loop
+
+        loop_result = auto_review_loop(parsed)
+        final_script = loop_result["script"]
+        review_result = loop_result["review"]
+
+        # 保存修改后的剧本
+        script.script_content = json.dumps(final_script, ensure_ascii=False)
+        script.title = final_script.get("title", script.title)
+        script.review_score = review_result.get("overall_score")
+        db.commit()
+
+        summary = review_result.get("summary", "")
+        iterations = loop_result["iterations"]
+        if iterations > 1:
+            summary += f"（自动修改 {iterations - 1} 轮后达标）"
+    except Exception:
+        review_result = {"overall_score": None, "summary": "评审失败", "ready_for_video": False}
+
+    return {
+        "id": script.id,
+        "title": script.title,
+        "status": script.status,
+        "genre": script.genre,
+        "tags": script.tags,
+        "created_at": script.created_at.isoformat(),
+        "updated_at": script.updated_at.isoformat() if script.updated_at else None,
+        "review_score": review_result.get("overall_score"),
+        "review_summary": review_result.get("summary", ""),
+        "review_ready": review_result.get("ready_for_video", False),
+    }
+
+
 @router.post("/scripts/{script_id}/regenerate-video")
 def regenerate_video(script_id: int, db: Session = Depends(get_db)):
+    """旧版：直接生成视频（无评审）。"""
     script = db.query(ComicScript).filter(ComicScript.id == script_id).first()
     if not script:
         raise HTTPException(status_code=404, detail="剧本不存在")
@@ -62,6 +154,42 @@ def regenerate_video(script_id: int, db: Session = Depends(get_db)):
 
     threading.Thread(target=_run, daemon=True).start()
     return {"message": "视频重新生成已触发", "script_id": script_id}
+
+
+@router.post("/scripts/{script_id}/generate-video")
+def generate_video_with_review(script_id: int, db: Session = Depends(get_db)):
+    """评审 → 自动修改达标 → 生成视频（一次完成）。"""
+    script = db.query(ComicScript).filter(ComicScript.id == script_id).first()
+    if not script:
+        raise HTTPException(status_code=404, detail="剧本不存在")
+
+    from app.services.video_pipeline import generate_video_for_script_with_review
+
+    def _run():
+        try:
+            result = generate_video_for_script_with_review(script_id)
+            if result.get("success"):
+                logger.info(
+                    f"Script {script_id} auto-review+generate done: "
+                    f"score={result.get('review_result', {}).get('overall_score', '?')}, "
+                    f"iterations={result.get('iterations')}"
+                )
+            if result.get("review_result"):
+                review = result["review_result"]
+                logger.info(
+                    f"Script {script_id} auto-review: score={review.get('overall_score')}, "
+                    f"iterations={result.get('iterations')}, achieved={result.get('achieved_target')}"
+                )
+            if not result.get("success"):
+                logger.error(f"Generate failed for script {script_id}: {result.get('error')}")
+        except Exception as e:
+            logger.exception(f"Auto review+generate failed for script {script_id}: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {
+        "message": "自动评审+生成视频已触发，完成后将通知",
+        "script_id": script_id,
+    }
 
 
 # ---- 触发生成 ----
@@ -238,3 +366,30 @@ def comic_stats(db: Session = Depends(get_db)):
             for s in ["draft", "generating_video", "video_done", "video_failed", "published"]
         },
     }
+
+
+# ---- 定时任务开关 ----
+
+@router.get("/scheduler/status")
+def scheduler_status():
+    """查看定时自动生成是否开启."""
+    from app.tasks.scheduler import is_auto_generate_enabled
+    return {"enabled": is_auto_generate_enabled()}
+
+
+@router.post("/scheduler/enable")
+def scheduler_enable():
+    """开启定时自动生成（每天 8:07, 12:07, 18:07 抓取热点 + 生成剧本）. """
+    from app.tasks.scheduler import enable_auto_generate
+    enable_auto_generate()
+    logger.info("Auto generate enabled by user")
+    return {"message": "定时自动生成已开启", "enabled": True}
+
+
+@router.post("/scheduler/disable")
+def scheduler_disable():
+    """关闭定时自动生成."""
+    from app.tasks.scheduler import disable_auto_generate
+    disable_auto_generate()
+    logger.info("Auto generate disabled by user")
+    return {"message": "定时自动生成已关闭", "enabled": False}

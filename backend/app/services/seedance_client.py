@@ -128,6 +128,7 @@ class SeedanceClient:
         duration: int = 5,
         resolution: str = "720p",
         ratio: str = "9:16",
+        reference_images: Optional[List[str]] = None,
     ) -> dict:
         """一键：创建任务 → 等待完成 → 下载视频."""
         task = self.create_video_task(
@@ -135,6 +136,7 @@ class SeedanceClient:
             duration=duration,
             resolution=resolution,
             ratio=ratio,
+            reference_images=reference_images,
         )
         result = self.wait_for_completion(task["task_id"])
         if result.get("video_url"):

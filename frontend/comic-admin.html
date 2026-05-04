@@ -11,11 +11,17 @@
   <header>
     <h1>漫剧视频管理面板</h1>
     <div class="stats-bar" id="statsBar">加载中...</div>
+    <div class="scheduler-bar">
+      <span>定时自动生成：</span>
+      <span id="schedulerStatus" class="scheduler-badge disabled">已关闭</span>
+      <button id="schedulerToggleBtn" class="btn btn-sm btn-outline">开启</button>
+    </div>
   </header>
 
   <nav class="tabs">
     <button class="tab active" data-tab="scripts">剧本列表</button>
     <button class="tab" data-tab="videos">视频队列</button>
+    <button class="tab" data-tab="product">商品带货</button>
     <button class="tab" data-tab="publish">发布管理</button>
   </nav>
 
@@ -25,6 +31,16 @@
       <input type="text" id="topicInput" placeholder="输入主题（留空则自动抓取热点）" style="flex:1">
       <button id="triggerBtn" class="btn btn-primary">手动触发生成</button>
       <button id="triggerBatchBtn" class="btn btn-secondary">批量生成 (3个)</button>
+    </div>
+    <div class="action-group">
+      <textarea id="scriptTextInput" placeholder="粘贴你的剧本文字，系统自动解析为结构化剧本..." style="flex:1; min-height:60px; resize:vertical; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:inherit"></textarea>
+      <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0">
+        <select id="visualStyleSelect" style="padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.85rem">
+          <option value="anime">动漫风格</option>
+          <option value="realistic">真人风格</option>
+        </select>
+        <button id="fromTextBtn" class="btn btn-primary" style="padding:8px 14px">生成剧本</button>
+      </div>
     </div>
     <div class="action-group">
       <select id="platformFilter">
@@ -48,6 +64,43 @@
     <div class="card-list" id="videoList"></div>
   </section>
 
+  <!-- 商品带货 -->
+  <section class="panel" id="productPanel">
+    <div class="product-upload-area" id="productUploadArea">
+      <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+        <div style="flex:1; min-width:280px;">
+          <h3 style="margin-bottom:8px;">① 上传商品照片</h3>
+          <input type="file" id="productPhotoInput" accept="image/*" multiple style="display:none">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button id="selectPhotosBtn" class="btn btn-outline">选择照片</button>
+            <span id="photoCount" style="color:var(--text-dim); font-size:0.85rem;">未选择</span>
+            <button id="uploadPhotosBtn" class="btn btn-primary" disabled>上传</button>
+          </div>
+          <div id="photoPreview" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
+        </div>
+        <div style="flex:2; min-width:320px;">
+          <h3 style="margin-bottom:8px;">② 填写商品信息</h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <input id="prodName" placeholder="商品名称" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <input id="prodCategory" placeholder="品类（如：美妆/食品/数码）" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <textarea id="prodDesc" placeholder="商品描述" style="grid-column:1/-1; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); resize:vertical; min-height:50px;"></textarea>
+            <input id="prodSellingPoints" placeholder="卖点（逗号分隔）" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <input id="prodAudience" placeholder="目标人群" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <select id="prodVisualStyle" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+              <option value="realistic">真人实拍风格</option>
+              <option value="anime">动漫风格</option>
+            </select>
+            <button id="generateAdScriptBtn" class="btn btn-primary" disabled>③ 生成带货剧本</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="productResult">
+      <h3>带货剧本列表</h3>
+      <div class="card-list" id="productAdList"></div>
+    </div>
+  </section>
+
   <!-- 发布管理 -->
   <section class="panel" id="publishPanel">
     <div class="card-list" id="publishList"></div>
@@ -67,6 +120,17 @@
         <button class="modal-close" id="modalClose">&times;</button>
       </div>
       <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- 带货详情 Modal -->
+  <div class="modal-overlay" id="adDetailModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="adModalTitle">带货剧本详情</h2>
+        <button class="modal-close" id="adModalClose">&times;</button>
+      </div>
+      <div class="modal-body" id="adModalBody"></div>
     </div>
   </div>
 </div>
