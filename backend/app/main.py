@@ -1,20 +1,13 @@
-"""
-情侣记录站 · FastAPI 后端
-对象打开网页即可看到你们的点点滴滴 💕
-"""
+"""漫剧视频自动化系统 · 剧本生成 + 视频生成"""
 import os
 from contextlib import asynccontextmanager
-from datetime import date
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
 
-from app.database import get_db, init_db
-from app.models import Anniversary, User
-from app.routers import anniversaries, memories, notes, photos, auth, comic_videos
-from app.security import get_current_user
+from app.database import init_db
+from app.routers import auth, comic_videos, coze_api
 from app.tasks.scheduler import start_scheduler, stop_scheduler
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,8 +25,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="情侣记录站",
-    description="记录两个人的点点滴滴",
+    title="漫剧视频系统",
+    description="自动抓取热点 → 生成剧本 → 生成视频",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -46,33 +39,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(memories.router)
-app.include_router(anniversaries.router)
-app.include_router(photos.router)
-app.include_router(notes.router)
 app.include_router(auth.router)
 app.include_router(comic_videos.router)
+app.include_router(coze_api.router)
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "message": "我们的小站运行中 💕"}
-
-
-@app.get("/api/today-in-history")
-def today_in_history():
-    """今日·我们的历史：可后续按日期查 memories 表，这里先返回占位."""
-    return {"message": "今天也是和你在一起的美好一天", "items": []}
-
-
-@app.get("/api/stats")
-def stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """我们在一起第 N 天：取最早的一个纪念日计算."""
-    first = db.query(Anniversary).filter(Anniversary.owner_id == current_user.id).order_by(Anniversary.date.asc()).first()
-    if not first:
-        return {"days_together": None, "message": "还没有添加纪念日哦"}
-    delta = date.today() - first.date
-    return {"days_together": delta.days, "first_date": str(first.date), "name": first.name}
+    return {"status": "ok", "message": "漫剧视频系统运行中"}
 
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

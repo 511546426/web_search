@@ -1,142 +1,107 @@
-# 情侣记录站 💕
+# 漫剧视频自动化系统
 
-记录两个人的点点滴滴，对象打开网页就能看到你们的时光轴、纪念日、相册和悄悄话。
-
-## 选型说明：网页 vs App
-
-**推荐使用网页 + PWA：**
-
-- **对象使用**：发一个链接即可打开，无需下载
-- **跨设备**：手机、平板、电脑都能用
-- **PWA**：支持「添加到主屏幕」，用起来像 App
+自动抓取热点话题 → AI 生成剧本 → 生成漫画风格视频。
 
 ## 功能
 
-- **我们在一起第 N 天**：根据「在一起的日子」纪念日自动计算
-- **纪念日**：添加重要日期，显示倒计时或已过天数
-- **时光轴**：按时间线记录文字与图片
-- **相册**：上传照片并写描述
-- **悄悄话**：写给对方的小句子
+- **热点抓取**：自动从微博、抖音等平台抓取热门话题
+- **AI 剧本生成**：调用 DeepSeek API 自动撰写剧本
+- **分镜生成**：根据剧本自动生成分镜描述和视频提示词
+- **视频生成**：通过 Seedance API 生成漫画风格短视频
+- **批量处理**：支持批量抓取热点并逐个生成视频
+- **视频发布管理**：标记发布状态（微博/抖音/B站/微信）
 
 ## 技术栈
 
 - **后端**：Python 3.10+ / FastAPI / SQLAlchemy / SQLite
-- **前端**：单页 HTML + CSS + JS，浪漫风格，支持 PWA
+- **AI**：DeepSeek API（剧本生成）/ Seedance API（视频生成）
+- **前端**：纯 HTML + CSS + JS 管理面板
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 配置环境变量
+
+```bash
+cp .env.example .env
+# 编辑 .env 填写 API Key 等配置
+```
+
+### 2. 安装依赖
 
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-### 2. 启动服务
-
-在项目根目录执行（以便正确找到 `frontend` 目录）：
+### 3. 启动服务
 
 ```bash
 cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-或从项目根目录：
+### 4. 打开管理面板
+
+浏览器访问：**http://localhost:8000/comic-admin.html**
+
+### 5. 注册账号
 
 ```bash
-python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-注意：uvicorn 的当前工作目录会影响 `FRONTEND_DIR` 的解析。若前端页面打不开，请从 `backend` 目录启动，并把 `frontend` 复制到 `backend/../frontend`（即与 `backend` 同级），或修改 `main.py` 中 `FRONTEND_DIR` 为你的实际路径。
-
-### 3. 打开网页
-
-浏览器访问：**http://localhost:8000**
-
-- 首页会显示「我们在一起第 N 天」（需先添加纪念日）
-- 切换标签可查看：纪念日、时光轴、相册、悄悄话
-
-### 4. 添加数据（API 示例）
-
-首次使用需要往数据库里加一点内容，可以用下面的方式。
-
-**添加「在一起的日子」纪念日（用于显示天数）：**
-
-```bash
-curl -X POST http://localhost:8000/api/anniversaries \
+curl -X POST http://localhost:8000/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"name":"在一起的日子","date":"2024-01-01","repeat_yearly":true}'
+  -d '{"username":"admin","password":"your-password"}'
 ```
 
-**添加一条时光轴：**
+### 6. 触发生成
 
 ```bash
-curl -X POST http://localhost:8000/api/memories \
+# 手动指定话题
+curl -X POST http://localhost:8000/api/comic/trigger \
   -H "Content-Type: application/json" \
-  -d '{"content":"今天一起看了日落，想和你一直这样看下去。","mood":"开心"}'
-```
+  -d '{"topic":"最近热门电影", "auto_generate_video": true}'
 
-**添加悄悄话：**
-
-```bash
-curl -X POST http://localhost:8000/api/notes \
+# 自动抓取热点批量生成
+curl -X POST http://localhost:8000/api/comic/trigger-batch \
   -H "Content-Type: application/json" \
-  -d '{"content":"每天都要更爱你一点","is_public":true}'
-```
-
-**上传照片（需 multipart）：**
-
-```bash
-curl -X POST http://localhost:8000/api/photos \
-  -F "file=@/path/to/photo.jpg" \
-  -F "description=第一次约会"
+  -d '{"limit": 3}'
 ```
 
 API 文档：**http://localhost:8000/docs**
-
-### 5. 可选：写入示例数据
-
-在 `backend` 目录下执行（需已安装依赖）：
-
-```bash
-cd backend && python scripts/seed_demo.py
-```
-
-刷新页面即可看到示例纪念日、时光轴和悄悄话。
 
 ## 项目结构
 
 ```
 ├── backend/
 │   ├── app/
-│   │   ├── main.py          # 入口、挂载前端与 /uploads
-│   │   ├── database.py      # SQLite 与建表
-│   │   ├── models.py        # 记忆 / 纪念日 / 相册 / 悄悄话
-│   │   ├── schemas.py       # 请求响应模型
-│   │   └── routers/         # 各模块 API
-│   ├── uploads/             # 上传的图片（自动创建）
+│   │   ├── main.py                # 入口
+│   │   ├── database.py            # SQLite 配置
+│   │   ├── models.py              # 数据模型
+│   │   ├── schemas.py             # 请求响应模型
+│   │   ├── security.py            # 认证鉴权
+│   │   ├── routers/
+│   │   │   ├── auth.py            # 注册登录
+│   │   │   └── comic_videos.py    # 漫剧视频 API
+│   │   └── services/
+│   │       ├── scraper.py         # 热点抓取
+│   │       ├── script_writer.py   # 剧本生成
+│   │       ├── deepseek_client.py # DeepSeek API
+│   │       ├── seedance_client.py # Seedance 视频 API
+│   │       └── video_pipeline.py  # 流水线编排
+│   │   └── tasks/
+│   │       └── scheduler.py       # 定时任务
+│   ├── uploads/                   # 生成视频输出
 │   └── requirements.txt
 ├── frontend/
-│   ├── index.html
-│   ├── css/style.css
-│   ├── js/app.js
-│   ├── manifest.json        # PWA
-│   └── sw.js                # Service Worker
-├── docs/
-│   └── DESIGN.md            # 设计方案
-└── README.md
+│   ├── comic-admin.html           # 管理面板
+│   ├── css/comic-admin.css
+│   └── js/comic-admin.js
+├── deploy/                        # 部署脚本
+└── .env.example
 ```
 
-## 部署建议
+## 部署
 
-- 将本仓库部署到一台有公网 IP 或域名的服务器（或云函数 + 对象存储等）。
-- 使用 **HTTPS**，这样 PWA 的 Service Worker 才能生效。
-- 若多人共用或需要隐私，可在后端加简单鉴权（如密码或邀请码），再在前端登录后带 token 请求 API。
+参考 `deploy/` 目录下的脚本：
 
-## 设计文档
-
-更完整的设计说明与选型理由见 [docs/DESIGN.md](docs/DESIGN.md)。
-
----
-
-祝你们记录下更多美好瞬间 💕
-# web_search
+- `aliyun-setup.sh`：阿里云服务器初始化
+- `comic-video.service`：systemd 服务配置
+- `nginx.conf`：Nginx 反向代理配置

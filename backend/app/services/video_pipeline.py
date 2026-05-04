@@ -3,9 +3,10 @@ import os
 import json
 import logging
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 
+from dotenv import load_dotenv
 from app.database import SessionLocal
 from app.models import ComicScript, ComicVideo
 from app.services.scraper import get_trending_topics
@@ -14,11 +15,15 @@ from app.services.seedance_client import seedance_client, SeedanceError
 
 logger = logging.getLogger("video_pipeline")
 
-UPLOADS_DIR = os.path.join(
+_ENV_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), ".env")
+load_dotenv(_ENV_FILE)
+
+_DEFAULT_UPLOADS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "uploads",
     "comic_videos",
 )
+UPLOADS_DIR = os.environ.get("VIDEO_OUTPUT_DIR", _DEFAULT_UPLOADS_DIR)
 
 
 @dataclass
@@ -44,7 +49,6 @@ def run_pipeline(
     """
     db = SessionLocal()
     try:
-        # Step 1: 生成剧本
         if isinstance(topic, dict):
             topic_title = topic.get("title", "Untitled")
         else:
@@ -53,11 +57,9 @@ def run_pipeline(
         logger.info(f"Generating script for: {topic_title}")
         script_data = generate_script(topic)
 
-        # Step 2: 生成分镜
         storyboard = generate_storyboard(script_data)
         script_data["storyboard"] = storyboard
 
-        # Step 3: 保存剧本到数据库
         db_script = ComicScript(
             title=script_data.get("title", topic_title),
             source_topic=json.dumps(topic, ensure_ascii=False) if isinstance(topic, dict) else topic_title,
@@ -75,51 +77,11 @@ def run_pipeline(
 
         result = PipelineResult(success=True, script_id=script_id, script=script_data)
 
-        # Step 4: 生成视频 (可选)
         if auto_generate_video:
             try:
-                db_script.status = "generating_video"
-                db.commit()
-
-                # 使用全部场景的 prompt 拼接，并明确指定动漫风格
-                style_prefix = "2D anime animation, manga art style, Japanese anime aesthetic, vibrant colors, clean lineart, "
-                combined_prompt = style_prefix + " ".join(
-                    sb["video_prompt"] for sb in storyboard[:5]
-                )[:2000]
-
-                logger.info(f"Creating Seedance video task for script {script_id}")
-                os.makedirs(UPLOADS_DIR, exist_ok=True)
-                output_path = os.path.join(
-                    UPLOADS_DIR, f"video_{script_id}_{datetime.utcnow():%Y%m%d_%H%M%S}.mp4"
-                )
-
-                seedance_result = seedance_client.create_and_download(
-                    prompt=combined_prompt,
-                    output_path=output_path,
-                    duration=min(15, script_data.get("duration_estimate", 10)),
-                    resolution=resolution,
-                    ratio="9:16",
-                )
-
-                # 保存视频记录
-                db_video = ComicVideo(
-                    script_id=script_id,
-                    file_path=output_path,
-                    seedance_task_id=seedance_result.get("task_id", ""),
-                    status="completed",
-                    duration_seconds=script_data.get("duration_estimate", 10),
-                    resolution=resolution,
-                    seedance_result=json.dumps(seedance_result, ensure_ascii=False),
-                )
-                db.add(db_video)
-                db_script.status = "video_done"
-                db.commit()
-                db.refresh(db_video)
-
-                result.video_id = db_video.id
-                result.video_path = output_path
-                logger.info(f"Video generated: id={db_video.id}, path={output_path}")
-
+                video_result = _do_generate_video(db, db_script, storyboard, resolution)
+                result.video_id = video_result.get("video_id")
+                result.video_path = video_result.get("video_path", "")
             except SeedanceError as e:
                 logger.error(f"Seedance error: {e}")
                 db_script.status = "video_failed"
@@ -131,6 +93,93 @@ def run_pipeline(
     except Exception as e:
         logger.exception(f"Pipeline failed: {e}")
         return PipelineResult(success=False, error=str(e))
+    finally:
+        db.close()
+
+
+def _do_generate_video(db, db_script: ComicScript, storyboard: List[Dict], resolution: str = "720p") -> dict:
+    """内部：为已有 script 对象生成视频（同步）。"""
+    db_script.status = "generating_video"
+    db.commit()
+
+    style_prefix = "2D anime animation, manga art style, Japanese anime aesthetic, vibrant colors, clean lineart, "
+    combined_prompt = style_prefix + " ".join(
+        sb["video_prompt"] for sb in storyboard[:5]
+    )[:2000]
+
+    logger.info(f"Creating Seedance video task for script {db_script.id}")
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    output_path = os.path.join(
+        UPLOADS_DIR, f"video_{db_script.id}_{datetime.utcnow():%Y%m%d_%H%M%S}.mp4"
+    )
+
+    try:
+        script_data = json.loads(db_script.script_content) if isinstance(db_script.script_content, str) else db_script.script_content
+        est_duration = script_data.get("duration_estimate", 10) if isinstance(script_data, dict) else 10
+    except (json.JSONDecodeError, AttributeError):
+        est_duration = 10
+
+    seedance_result = seedance_client.create_and_download(
+        prompt=combined_prompt,
+        output_path=output_path,
+        duration=min(15, est_duration),
+        resolution=resolution,
+        ratio="9:16",
+    )
+
+    db_video = ComicVideo(
+        script_id=db_script.id,
+        file_path=output_path,
+        seedance_task_id=seedance_result.get("task_id", ""),
+        status="completed",
+        duration_seconds=10,
+        resolution=resolution,
+        seedance_result=json.dumps(seedance_result, ensure_ascii=False),
+    )
+    db.add(db_video)
+    db_script.status = "video_done"
+    db.commit()
+    db.refresh(db_video)
+
+    logger.info(f"Video generated: id={db_video.id}, path={output_path}")
+    return {"video_id": db_video.id, "video_path": output_path}
+
+
+def generate_video_for_script(script_id: int, resolution: str = "720p") -> dict:
+    """为已有剧本生成视频（独立使用，不创建新剧本）。
+
+    返回: {"success": bool, "video_id": int|None, "error": str}
+    """
+    db = SessionLocal()
+    try:
+        script = db.query(ComicScript).filter(ComicScript.id == script_id).first()
+        if not script:
+            return {"success": False, "error": "剧本不存在"}
+
+        if script.status == "video_done":
+            existing = db.query(ComicVideo).filter(
+                ComicVideo.script_id == script_id,
+                ComicVideo.status == "completed",
+            ).first()
+            return {"success": True, "video_id": existing.id if existing else None}
+
+        storyboard = json.loads(script.storyboard_json) if script.storyboard_json else []
+        if not storyboard:
+            # 没有分镜则从剧本重新生成
+            script_content = json.loads(script.script_content)
+            storyboard = generate_storyboard(script_content)
+            script.storyboard_json = json.dumps(storyboard, ensure_ascii=False)
+            db.commit()
+
+        result = _do_generate_video(db, script, storyboard, resolution)
+        return {"success": True, "video_id": result.get("video_id"), "error": ""}
+
+    except SeedanceError as e:
+        logger.error(f"Seedance error for script {script_id}: {e}")
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.exception(f"Video generation failed for script {script_id}: {e}")
+        return {"success": False, "error": str(e)}
     finally:
         db.close()
 

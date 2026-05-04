@@ -104,12 +104,21 @@ class SeedanceClient:
         raise SeedanceError(f"Video generation timed out after {max_wait}s")
 
     def download_video(self, video_url: str, output_path: str) -> str:
-        """下载生成的视频到本地."""
+        """下载生成的视频到本地（若配置了 SMB 则写入 Windows 共享，不占 VM 磁盘）。"""
         resp = httpx.get(video_url, timeout=120.0, follow_redirects=True)
         resp.raise_for_status()
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, "wb") as f:
-            f.write(resp.content)
+        content = resp.content
+
+        # SMB 远程存储（不占 VM 磁盘）
+        if os.environ.get("SMB_HOST") and os.environ.get("SMB_PASSWORD"):
+            from app.services.smb_storage import smb_write
+            smb_write(output_path, content)
+            logger.info("Video saved to SMB: %s", output_path)
+        else:
+            # 本地存储（兜底）
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            with open(output_path, "wb") as f:
+                f.write(content)
         return output_path
 
     def create_and_download(
