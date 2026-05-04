@@ -129,9 +129,23 @@ def _do_generate_video(db, db_script: ComicScript, storyboard: List[Dict], resol
         ratio="9:16",
     )
 
+    # 后期处理：TTS 配音 + 字幕
+    try:
+        processed_path = output_path
+        script_data = json.loads(db_script.script_content) if isinstance(db_script.script_content, str) else db_script.script_content
+        if isinstance(script_data, dict):
+            from app.services.video_postprocessor import postprocess_video
+            processed = postprocess_video(output_path, script_data)
+            if processed != output_path:
+                processed_path = processed
+                logger.info(f"Post-processed video for script {db_script.id}: {processed_path}")
+    except Exception as e:
+        logger.exception(f"Post-processing failed for script {db_script.id}: {e}")
+        processed_path = output_path
+
     db_video = ComicVideo(
         script_id=db_script.id,
-        file_path=output_path,
+        file_path=processed_path,
         seedance_task_id=seedance_result.get("task_id", ""),
         status="completed",
         duration_seconds=10,
@@ -143,8 +157,8 @@ def _do_generate_video(db, db_script: ComicScript, storyboard: List[Dict], resol
     db.commit()
     db.refresh(db_video)
 
-    logger.info(f"Video generated: id={db_video.id}, path={output_path}")
-    return {"video_id": db_video.id, "video_path": output_path}
+    logger.info(f"Video generated: id={db_video.id}, path={processed_path}")
+    return {"video_id": db_video.id, "video_path": processed_path}
 
 
 def generate_video_for_script(script_id: int, resolution: str = "720p") -> dict:

@@ -434,10 +434,24 @@ def _do_generate_ad_video(db, ad: ProductAd, resolution: str = "720p", script_da
     if result.get("video_url"):
         seedance_client.download_video(result["video_url"], output_path)
 
-    ad.video_path = output_path
+    # 后期处理：TTS 配音 + 字幕（仅剧情模式有对白）
+    processed_path = output_path
+    if script_data and isinstance(script_data, dict):
+        showcase_style = script_data.get("showcase_style", "story")
+        if showcase_style != "visual":
+            try:
+                from app.services.video_postprocessor import postprocess_video
+                processed = postprocess_video(output_path, script_data)
+                if processed != output_path:
+                    processed_path = processed
+                    logger.info(f"Post-processed ad video for ad {ad.id}: {processed_path}")
+            except Exception as e:
+                logger.exception(f"Ad post-processing failed: {e}")
+
+    ad.video_path = processed_path
     ad.status = "video_done"
     db.commit()
-    logger.info(f"Ad video done: id={ad.id}, path={output_path}")
+    logger.info(f"Ad video done: id={ad.id}, path={processed_path}")
 
 
 # ---- 查询 ----
