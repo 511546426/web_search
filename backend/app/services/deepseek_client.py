@@ -1,6 +1,7 @@
 """DeepSeek API 客户端 — 兼容 Anthropic Messages API 协议."""
 import os
 import json
+import base64
 import httpx
 from typing import Dict, List, Optional
 
@@ -20,6 +21,27 @@ def _build_messages(user_text: str) -> List[Dict]:
     return [{"role": "user", "content": [{"type": "text", "text": user_text}]}]
 
 
+def _build_multimodal_messages(user_text: str, image_paths: List[str]) -> List[Dict]:
+    """构建多模态消息（文本 + 图片 base64）."""
+    content_blocks = [{"type": "text", "text": user_text}]
+    for path in image_paths:
+        if not os.path.exists(path):
+            continue
+        ext = os.path.splitext(path)[1].lower()
+        mime = "image/png" if ext == ".png" else "image/jpeg"
+        with open(path, "rb") as f:
+            b64_data = base64.b64encode(f.read()).decode()
+        content_blocks.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": mime,
+                "data": b64_data,
+            },
+        })
+    return [{"role": "user", "content": content_blocks}]
+
+
 def chat(
     user_message: str,
     system: Optional[str] = None,
@@ -27,19 +49,25 @@ def chat(
     temperature: float = 0.7,
     max_tokens: int = 4096,
     timeout: float = 120.0,
+    image_paths: Optional[List[str]] = None,
 ) -> str:
-    """发送对话请求，返回模型文本响应（Anthropic Messages API 格式）."""
+    """发送对话请求，返回模型文本响应（Anthropic Messages API 格式）.
+
+    支持通过 image_paths 传入图片 base64，让模型基于图片内容进行分析。
+    """
     url = f"{DEEPSEEK_BASE_URL}/v1/messages"
     headers = {
         "x-api-key": DEEPSEEK_API_KEY,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
     }
+    messages = _build_multimodal_messages(user_message, image_paths) if image_paths else _build_messages(user_message)
+
     body: Dict = {
         "model": model or DEEPSEEK_MODEL,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "messages": _build_messages(user_message),
+        "messages": messages,
         "thinking": {"type": "disabled"},
     }
     sys_text = system or SYSTEM_PROMPT
@@ -57,9 +85,10 @@ def chat_json(
     model: Optional[str] = None,
     temperature: float = 0.7,
     max_tokens: int = 4096,
+    image_paths: Optional[List[str]] = None,
 ) -> Dict:
-    """发送对话请求，返回解析后的 JSON."""
-    text = chat(user_message, system, model, temperature, max_tokens)
+    """发送对话请求，返回解析后的 JSON。支持 image_paths 多模态."""
+    text = chat(user_message, system, model, temperature, max_tokens, image_paths=image_paths)
     text = text.strip()
     if text.startswith("```"):
         lines = text.split("\n")

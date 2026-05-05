@@ -1,8 +1,8 @@
 """API 请求/响应模型."""
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserResponse(BaseModel):
@@ -112,7 +112,7 @@ class ProductInfoRequest(BaseModel):
     selling_points: str = ""  # 卖点，逗号分隔
     target_audience: str = ""  # 目标人群
     style_preference: str = ""  # 风格偏好
-    photo_ids: list[str] = []  # 上传的图片文件名列表
+    photo_ids: List[str] = Field(default_factory=list)  # 上传的图片文件名列表
     visual_style: str = "realistic"  # 动漫/真人
     showcase_style: str = "story"  # story（剧情带货）/ visual（视觉展示）
 

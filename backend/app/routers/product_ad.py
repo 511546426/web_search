@@ -114,9 +114,40 @@ def upload_product_video(file: UploadFile = File(...)):
 # ---- 生成带货剧本 ----
 
 def _generate_ad_script(product: ProductInfoRequest) -> dict:
-    """调用 DeepSeek 生成带货剧本."""
-    from app.services.deepseek_client import chat_json
+    """先用豆包视觉模型识别商品图片，再将文字描述交给 DeepSeek 生成带货剧本.
 
+    流程：doubao-1.5-vision-lite 图片分析 → 文字描述 → DeepSeek 剧本生成。
+    DeepSeek 不支持图片识别，因此拆分为两步。
+    """
+    from app.services.deepseek_client import chat_json
+    from app.services.doubao_vision_client import analyze_product_images
+
+    # 构建本地图片路径列表
+    image_paths = []
+    for pid in product.photo_ids:
+        if not pid:
+            continue
+        img_path = os.path.join(PRODUCT_PHOTO_DIR, pid)
+        if os.path.exists(img_path):
+            image_paths.append(img_path)
+        else:
+            logger.warning(f"Product photo not found: {img_path}")
+
+    # ---- 第一步：使用豆包视觉模型分析商品图片 ----
+    image_description = ""
+    if image_paths:
+        try:
+            image_description = analyze_product_images(
+                image_paths=image_paths,
+                product_name=product.name,
+                product_category=product.category,
+            )
+            logger.info(f"Doubao vision analysis done, description length: {len(image_description)}")
+        except Exception as e:
+            logger.exception(f"Doubao vision analysis failed: {e}")
+            image_description = f"（图片分析失败: {e}，请根据商品信息生成剧本）"
+
+    # ---- 第二步：将图片文字描述交给 DeepSeek 生成剧本（纯文本，不传图） ----
     visual_style_text = "真人实景拍摄，真人出镜或产品实拍展示" if product.visual_style == "realistic" else "动漫风格，二维动画展示产品"
     style_note = "写实、真实产品展示" if product.visual_style == "realistic" else "二次元动漫风格"
 
@@ -146,9 +177,25 @@ def _generate_ad_script(product: ProductInfoRequest) -> dict:
 - 模特动作要简单明确（缓步向前/转身回眸/整理衣领/轻抚面料），避免复杂动作
 
 ### 4. 节奏与音乐
-- 8-10 个场景，每个 2-5 秒，总时长控制在 20-35 秒
-- 快慢交替：静态展示（2-3 秒）与动态镜头（3-5 秒）穿插
+- 6-8 个场景，每个 1.5-3 秒，总时长严格控制在 15 秒左右
+- 快慢交替：静态展示（1.5-2 秒）与动态镜头（2-3 秒）穿插
 - 背景音乐建议具体到风格+节奏+氛围（如：轻快吉他，BPM 120，夏日清新感）
+
+### 5. 严格参考商品图片描述
+- 必须严格依据下方提供的「商品图片视觉分析」中描述的**商品本身**外观、颜色、形状、材质细节
+- camera_angle 和 product_focus 必须基于视觉分析中提到的真实商品特征来写
+- 禁止凭空想象商品未提及的外观特征
+
+### 6. 场景背景设计（极其重要！）
+- **绝对不要使用纯色背景/摄影棚/白墙**——即使原图是棚拍纯色背景，也必须设计真实的生活场景
+- 这是一段连续 15 秒的视频，**所有场景必须发生在同一个主背景环境中**，通过不同镜头角度来展示不同的产品卖点
+- 根据商品品类和调性选择**一个最匹配的实景环境**：
+  - 服装类：都市街头 / 咖啡馆露台 / 海滨栈道 / 公园绿荫 / 商务写字楼大厅 / 精品店
+  - 美妆类：精致梳妆台 / 落地窗旁晨光 / 闺蜜下午茶 / 花园
+  - 数码类：极简书桌 / 夜景天台 / 创意工作室
+  - 食品类：温馨厨房 / 野餐草地 / 家庭餐桌
+- **同一环境内可以有不同区域**：比如选择"咖啡馆"，镜头可以从露台→吧台→落地窗旁移动，但始终在同一个咖啡馆内
+- 每个场景的 camera_angle 中必须包含该统一环境的具体描述
 
 输出严格遵循 JSON 结构，每个场景都是一帧可执行的视觉指令：
 
@@ -159,16 +206,17 @@ def _generate_ad_script(product: ProductInfoRequest) -> dict:
   "theme": "核心卖点一句话",
   "showcase_style": "visual",
   "visual_style": "{product.visual_style}",
+  "setting": "统一的场景环境描述（如「午后阳光洒落的红砖咖啡馆，暖木色调装修，绿植环绕，落地窗外是安静的街景」）",
   "scenes": [
     {{
       "scene": 1,
-      "camera_angle": "景别 + 角度 + 光影，如「正面全身，模特站立窗边，柔和的侧光照亮全身」",
+      "camera_angle": "景别 + 角度 + 在统一环境中的具体位置 + 光影，如「正面全身，模特站在咖啡馆露台木质栏杆旁，午后自然光从侧方照亮全身」",
       "action": "模特动作描述，具体可执行",
-      "product_focus": "本场景要展示的产品卖点",
-      "duration_seconds": 4
+      "product_focus": "本场景要展示的产品卖点（必须基于商品图片视觉分析中实际描述的特征）",
+      "duration_seconds": 2
     }}
   ],
-  "duration_estimate": 35,
+  "duration_estimate": 15,
   "tags": ["标签"],
   "background_music": "具体的背景音乐风格建议（曲风+节奏+氛围）"
 }}"""
@@ -207,6 +255,21 @@ def _generate_ad_script(product: ProductInfoRequest) -> dict:
 - 信任感：权威背书 / 用户证言 / 数据支撑
 - 利益点：省钱 / 省时 / 变美 / 健康 / 社交价值
 
+### 6. 严格参考商品图片描述
+- 必须严格依据下方提供的「商品图片视觉分析」中描述的**商品本身**外观、颜色、形状、材质细节
+- 所有场景的 product_focus 必须基于视觉分析中提到的真实商品特征来写，禁止凭空想象
+
+### 7. 场景背景设计（极其重要！）
+- **绝对不要使用纯色背景/摄影棚/白墙**——即使原图是棚拍纯色背景，也必须设计真实的生活场景
+- 这是一段连续 15 秒的视频，**所有场景必须发生在同一个主背景环境中**，通过不同镜头角度和剧情推进来展示产品
+- 根据商品品类和剧情调性选择**一个最匹配的实景环境**：
+  - 服装类：都市街头 / 咖啡馆 / 海滨栈道 / 公园 / 写字楼 / 精品店
+  - 美妆类：精致梳妆台 / 落地窗旁 / 闺蜜聚餐 / 花园下午茶
+  - 数码类：极简书桌 / 夜景天台 / 创意工作室
+  - 食品类：温馨厨房 / 野餐草地 / 家庭餐桌
+- **同一环境内可以有不同区域**：比如选择"咖啡馆"，剧情可以在门口→座位→吧台间推进，但始终在同一个场所
+- 每个场景的 location 必须描述统一环境中的具体位置和细节
+
 输出严格遵循 JSON 结构，确保片头抓人、片中精彩、片尾促单：
 
 {{
@@ -216,45 +279,66 @@ def _generate_ad_script(product: ProductInfoRequest) -> dict:
   "theme": "核心卖点一句话",
   "showcase_style": "story",
   "visual_style": "{product.visual_style}",
+  "setting": "统一的场景环境描述（如「午后阳光洒落的红砖咖啡馆，暖木色调装修，绿植环绕，落地窗外是安静的街景」）",
   "characters": [
     {{"name": "角色", "role": "主角/配角", "description": "角色描述"}}
   ],
   "scenes": [
     {{
       "scene": 1,
-      "location": "场景描述（含环境+光影+氛围）",
+      "location": "统一环境中的具体位置（如「咖啡馆门口，推门而入，阳光从身后洒进来」），禁止纯色背景",
       "narration": "旁白（画外音，推情绪或点卖点）",
       "dialogues": [
         {{"character": "角色", "line": "台词", "emotion": "情绪标注"}}
       ],
-      "product_focus": "本场景展示的产品卖点",
+      "product_focus": "本场景展示的产品卖点（必须基于商品图片视觉分析中实际描述的特征）",
       "shot_type": "远景/中景/近景/特写",
-      "duration_seconds": 6
+      "duration_seconds": 2
     }}
   ],
-  "duration_estimate": 45,
+  "duration_estimate": 15,
   "tags": ["标签"],
   "cta": "行动号召，引导购买的话术（具体、紧迫、有利益点）"
 }}"""
 
-    prompt = f"""Create an e-commerce promotion short video script based on this product info:
+    # 构建 prompt —— 将豆包视觉分析的文字描述嵌入，而不是传图片
+    image_section = ""
+    if image_description:
+        image_section = f"""
+===== 商品图片视觉分析（由 AI 视觉模型识别，以下为图片中商品的真实外观描述）=====
 
-Product name: {product.name}
-Category: {product.category}
-Description: {product.description}
-Selling points: {product.selling_points}
-Target audience: {product.target_audience}
-Style preference: {product.style_preference or 'Not specified'}
-Showcase mode: {'Visual showcase (no dialogue)' if product.showcase_style == 'visual' else 'Story-driven drama'}
+{image_description}
 
-Photo count: {len(product.photo_ids)} product photos available as reference.
+===== 视觉分析结束 =====
 
-Create a compelling short video script that showcases this product effectively.
-Return ONLY the JSON, no markdown fences, no extra text."""
+"""
+
+    prompt = f"""{image_section}Based on the above detailed visual analysis of {len(image_paths)} product photos, create a short e-commerce video script.
+
+IMPORTANT: The visual analysis above describes EXACTLY what the product looks like in the uploaded photos.
+- Product appearance (color, shape, material, details): strictly follow the analysis, do NOT invent features.
+- Scene backgrounds: do NOT copy the photo's background. Design rich, real-world environments that match the product's style and target audience. Use at least 3-4 different locations across all scenes.
+
+Product info:
+- Name: {product.name}
+- Category: {product.category}
+- Description: {product.description}
+- Selling points: {product.selling_points}
+- Target audience: {product.target_audience}
+- Style preference: {product.style_preference or 'Not specified'}
+- Showcase mode: {'Visual showcase (no dialogue)' if product.showcase_style == 'visual' else 'Story-driven drama'}
+
+CRITICAL RULES:
+1. Product features (product_focus) must reference actual features from the visual analysis — do NOT describe anything not mentioned.
+2. This is a single continuous 15-second video. ALL scenes must take place in ONE unified real-world location (e.g. a café, a park, a city street). NEVER use plain/solid color backgrounds or studio backdrops. Different scenes show different camera angles and product details within the SAME environment.
+3. Choose one location that best matches the product's style and target audience. Within that location, scenes can use different spots (e.g. terrace → counter → window seat of the same café).
+
+Total video duration: ~15 seconds. Return ONLY the JSON, no markdown fences, no extra text."""
 
     result = chat_json(prompt, system=system, temperature=0.7, max_tokens=4096)
     result["visual_style"] = product.visual_style
     result["showcase_style"] = product.showcase_style
+    result["image_description"] = image_description
     return result
 
 
@@ -424,13 +508,34 @@ def _do_generate_ad_video(db, ad: ProductAd, resolution: str = "720p", script_da
     )
 
     # 单段生成：将所有场景写入一个 prompt，r2v 模型自动压缩场景
-    SEGMENT_DURATION = 10
-    style_prefix = (
-        "Cinematic product showcase video, professional model, multi-angle shoot, "
-        "natural lighting, high quality, 4K, fashion photography style, "
-    ) if visual_style == "realistic" else (
-        "2D anime fashion showcase, smooth animation, vibrant colors, character showcase, "
+    SEGMENT_DURATION = 15  # 目标视频时长 ~15 秒
+
+    # 从剧本中提取豆包视觉分析的商品描述，嵌入 Seedance prompt 强化参考
+    image_desc_snippet = ""
+    if isinstance(script_data, dict):
+        raw_desc = script_data.get("image_description", "")
+        if raw_desc:
+            image_desc_snippet = raw_desc[:500]
+
+    ref_instruction = (
+        "CRITICAL: The generated video MUST strictly match the reference images. "
+        "The product's appearance, color, shape, texture, material, and all visible details "
+        "in the video must be identical to the uploaded reference photos. "
+        "Do NOT alter or reimagine the product — reproduce it exactly as shown. "
     )
+
+    style_prefix = (
+        ref_instruction +
+        "Cinematic product showcase video, professional model, multi-angle "
+        "shoot, natural lighting, high quality, 4K, fashion photography style. "
+    ) if visual_style == "realistic" else (
+        ref_instruction +
+        "2D anime fashion showcase, smooth animation, vibrant colors. "
+    )
+
+    if image_desc_snippet:
+        style_prefix += f"Product appearance: {image_desc_snippet}. "
+
     scene_descs = []
     for s in scenes:
         angle = s.get("camera_angle", "")
