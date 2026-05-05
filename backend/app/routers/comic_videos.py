@@ -266,6 +266,42 @@ def delete_video(video_id: int, db: Session = Depends(get_db)):
     return {"message": "已删除", "video_id": video_id}
 
 
+# ---- B站登录 ----
+
+@router.get("/bilibili/login")
+def bilibili_login_status():
+    """查看B站登录状态。"""
+    from app.services.bilibili_publisher import get_publisher
+
+    pub = get_publisher()
+    return {"logged_in": pub.is_logged_in and pub.check_login_valid()}
+
+
+@router.post("/bilibili/login")
+def bilibili_login():
+    """生成B站登录二维码。"""
+    from app.services.bilibili_publisher import generate_qrcode_login
+
+    upload_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "uploads"
+    )
+    result = generate_qrcode_login(output_dir=upload_dir)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return {
+        "qr_image_url": "/uploads/bilibili_qrcode.png",
+        "message": "请用B站手机APP扫描二维码登录",
+    }
+
+
+@router.get("/bilibili/login/check")
+def bilibili_login_check():
+    """检查二维码扫码状态。"""
+    from app.services.bilibili_publisher import check_qrcode_login
+
+    return check_qrcode_login()
+
+
 # ---- 发布 ----
 
 @router.post("/videos/{video_id}/publish")
@@ -277,17 +313,19 @@ def publish_video(video_id: int, body: PublishRequest, db: Session = Depends(get
     script = db.query(ComicScript).filter(ComicScript.id == video.script_id).first()
     video_file = video.file_path or ""
     publish_url = ""
-    publish_error = ""
+    publish_message = body.message or ""
+    is_draft = False
 
     # B站：真正上传发布
+    result = {}
     if body.platform == "bilibili":
         from app.services.bilibili_publisher import get_publisher, BilibiliError
 
         publisher = get_publisher()
-        if not publisher:
+        if not publisher.is_logged_in:
             raise HTTPException(
                 status_code=400,
-                detail="B站发布未配置（缺少 BILIBILI_APP_KEY / APP_SECRET / REFRESH_TOKEN）",
+                detail="B站未登录，请先扫码登录（点上方B站扫码登录按钮）",
             )
 
         try:
@@ -319,42 +357,41 @@ def publish_video(video_id: int, body: PublishRequest, db: Session = Depends(get
                     tags=["漫剧", "AI视频", "AI生成"],
                 )
                 publish_url = result.get("url", "")
-                if result.get("bvid"):
-                    publish_error = ""
-                else:
-                    publish_error = "B站发布返回异常"
+                publish_message = result.get("message", body.message or "")
+                is_draft = result.get("draft", False)
             finally:
                 os.unlink(tmp_path)
 
         except Exception as e:
             logger.exception("Bilibili publish failed")
             raise HTTPException(status_code=502, detail=f"B站发布失败: {e}")
-    else:
-        # 其他平台（微博/抖音/微信）：仅记录
-        pass
 
     log = PublishLog(
         video_id=video_id,
         platform=body.platform,
-        status="published",
+        status="draft" if is_draft else "published",
         publish_url=publish_url,
-        publish_message=body.message,
+        publish_message=publish_message,
         published_at=datetime.utcnow(),
     )
     db.add(log)
 
-    if script:
-        script.status = "published"
+    if script and result.get("draft"):
+        script.status = "draft"
 
     db.commit()
     db.refresh(log)
 
-    return {
-        "message": f"已发布到 {body.platform}",
+    resp = {
+        "message": publish_message or f"已发布到 {body.platform}",
         "publish_id": log.id,
         "video_id": video_id,
         "publish_url": publish_url,
     }
+    if is_draft:
+        resp["draft"] = True
+        resp["draft_url"] = publish_url
+    return resp
 
 
 @router.get("/publish-logs", response_model=List[PublishLogResponse])

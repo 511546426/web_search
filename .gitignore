@@ -25,3 +25,4 @@ backend/uploads/*
 .vscode/
 *.swp
 .DS_Store
+bilibili_credential.json

@@ -383,33 +383,36 @@ def _do_generate_ad_video(db, ad: ProductAd, resolution: str = "720p", script_da
     scenes = raw_scenes if isinstance(raw_scenes, list) else []
     showcase_style = script_data.get("showcase_style", "story") if isinstance(script_data, dict) else "story"
 
-    if showcase_style == "visual":
-        style_prefix = (
-            "Cinematic product showcase video, professional model, multi-angle shoot, "
-            "natural lighting, high quality, 4K, fashion photography style, "
-        ) if visual_style == "realistic" else (
-            "2D anime fashion showcase, smooth animation, vibrant colors, character showcase, "
-        )
-        scene_descs = []
-        for s in scenes[:8]:
-            angle = s.get("camera_angle", "")
-            action = s.get("action", "")
-            focus = s.get("product_focus", "")
-            parts = [p for p in [angle, action, focus] if p]
-            scene_descs.append(f"Scene {s.get('scene', '?')}: " + ", ".join(parts))
-        combined_prompt = style_prefix + ". ".join(scene_descs)
-    else:
-        style_prefix = "Realistic, live-action, product showcase, cinematic lighting, " if visual_style == "realistic" else "2D anime animation, product illustration style, "
-        combined_prompt = style_prefix + " ".join(
-            s.get("product_focus", s.get("narration", "")) for s in scenes[:5]
-        )[:2000]
-
-    combined_prompt = combined_prompt[:2000]
-
-    # 参考图 URL
-    reference_urls = [_photo_url(pid) for pid in photo_ids if pid]
+    # 参考图 URL — 无公网地址时用 base64 data URI 内嵌到请求中
+    reference_urls = []
+    for pid in photo_ids:
+        if not pid:
+            continue
+        if PUBLIC_URL:
+            reference_urls.append(_photo_url(pid))
+        else:
+            # 无公网地址：读取本地图片转 base64 data URI
+            img_path = os.path.join(PRODUCT_PHOTO_DIR, pid)
+            if os.path.exists(img_path):
+                import base64
+                with open(img_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                ext = os.path.splitext(pid)[1].lower() or ".jpg"
+                mime = "image/png" if ext == ".png" else "image/jpeg"
+                reference_urls.append(f"data:{mime};base64,{b64}")
+                logger.info(f"  Ref image (data URI): {pid} ({len(b64)//1024}KB base64)")
+            else:
+                logger.warning(f"  Ref image not found: {img_path}")
 
     logger.info(f"Creating Seedance ad video task for ad {ad.id}, ref images: {len(reference_urls)}")
+
+    # 检查 API key 是否已配置
+    if not os.environ.get("SEEDANCE_API_KEY"):
+        ad.status = "video_failed"
+        ad.error_message = "SEEDANCE_API_KEY 未配置，无法生成视频"
+        db.commit()
+        logger.error(f"Ad {ad.id} failed: SEEDANCE_API_KEY not set")
+        return
 
     video_dir = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -420,19 +423,47 @@ def _do_generate_ad_video(db, ad: ProductAd, resolution: str = "720p", script_da
         video_dir, f"ad_{ad.id}_{datetime.utcnow():%Y%m%d_%H%M%S}.mp4"
     )
 
-    est_duration = script_data.get("duration_estimate", 15) if isinstance(script_data, dict) else 15
-
-    # 创建任务（带参考图）
-    task = seedance_client.create_video_task(
-        prompt=combined_prompt,
-        duration=min(20, est_duration),
-        resolution=resolution,
-        ratio="9:16",
-        reference_images=reference_urls if reference_urls else None,
+    # 单段生成：将所有场景写入一个 prompt，r2v 模型自动压缩场景
+    SEGMENT_DURATION = 10
+    style_prefix = (
+        "Cinematic product showcase video, professional model, multi-angle shoot, "
+        "natural lighting, high quality, 4K, fashion photography style, "
+    ) if visual_style == "realistic" else (
+        "2D anime fashion showcase, smooth animation, vibrant colors, character showcase, "
     )
-    result = seedance_client.wait_for_completion(task["task_id"])
-    if result.get("video_url"):
+    scene_descs = []
+    for s in scenes:
+        angle = s.get("camera_angle", "")
+        action = s.get("action", "")
+        focus = s.get("product_focus", "")
+        parts = [p for p in [angle, action, focus] if p]
+        scene_descs.append(f"Scene {s.get('scene', '?')}: " + ", ".join(parts))
+    combined_prompt = (style_prefix + ". ".join(scene_descs))[:2000]
+
+    logger.info(
+        f"Ad {ad.id}: generating single segment {SEGMENT_DURATION}s "
+        f"with {len(scenes)} scenes, prompt={combined_prompt[:80]}..."
+    )
+
+    try:
+        task = seedance_client.create_video_task(
+            prompt=combined_prompt,
+            duration=SEGMENT_DURATION,
+            resolution=resolution,
+            ratio="9:16",
+            reference_images=reference_urls if reference_urls else None,
+        )
+        result = seedance_client.wait_for_completion(task["task_id"])
+        if not result.get("video_url"):
+            raise SeedanceError("Video generation returned no video_url")
         seedance_client.download_video(result["video_url"], output_path)
+
+    except SeedanceError as e:
+        ad.status = "video_failed"
+        ad.error_message = str(e)
+        db.commit()
+        logger.error(f"Seedance video generation failed for ad {ad.id}: {e}")
+        return
 
     # 后期处理：TTS 配音 + 字幕（仅剧情模式有对白）
     processed_path = output_path

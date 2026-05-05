@@ -176,7 +176,8 @@ async function loadVideos () {
         </div>
         <div class="card-actions">
           ${v.file_path ? '<button class="btn btn-outline btn-sm" onclick="previewVideo(\'' + escHtml(v.file_path) + '\')">预览</button>' : ''}
-          <button class="btn btn-success btn-sm" onclick="publishVideo(${v.id})" ${v.status !== 'completed' ? 'disabled' : ''}>标记发布</button>
+          <button class="btn btn-info btn-sm" onclick="bilibiliLogin()">B站登录</button>
+          <button class="btn btn-success btn-sm" onclick="publishVideo(${v.id})" ${v.status !== 'completed' ? 'disabled' : ''}>发布</button>
           <button class="btn btn-sm" style="background:transparent;border:1px solid var(--danger);color:var(--danger);padding:6px 8px;" onclick="deleteVideo(${v.id})" title="删除">✕</button>
         </div>
       </div>
@@ -315,17 +316,49 @@ async function generateWithReview (id, type) {
 }
 
 async function publishVideo (id) {
-  const platform = prompt('发布平台 (weibo / douyin / bilibili / wechat):', 'bilibili');
+  const platform = prompt('发布平台 (bilibili / weibo / douyin / wechat):', 'bilibili');
   if (!platform) return;
   try {
     const res = await api(API + '/videos/' + id + '/publish', {
       method: 'POST',
       body: JSON.stringify({ platform, message: '审核通过，发布' })
     });
-    alert(res.message);
+    if (res.draft) {
+      alert(res.message + '\n\n草稿已保存到B站创作中心，请手动发布。');
+    } else {
+      alert(res.message);
+      if (res.publish_url) alert('发布链接: ' + res.publish_url);
+    }
     loadStats();
     loadCurrentTab();
   } catch (e) { alert('发布失败: ' + e.message); }
+}
+
+async function bilibiliLogin () {
+  try {
+    const res = await api(API + '/bilibili/login', { method: 'POST' });
+    if (res.qr_image_url) {
+      const url = window.location.origin + res.qr_image_url;
+      window.open(url, '_blank');
+      // 轮询等待扫码完成
+      const check = setInterval(async () => {
+        try {
+          const st = await api(API + '/bilibili/login/check', { method: 'GET' });
+          if (st.status === 'done') {
+            clearInterval(check);
+            alert('B站登录成功！');
+            loadCurrentTab();
+          } else if (st.status === 'timeout') {
+            clearInterval(check);
+            alert('二维码已过期，请重新生成');
+          }
+        } catch (_) {}
+      }, 3000);
+      setTimeout(() => clearInterval(check), 300000);
+    } else {
+      alert('生成二维码失败');
+    }
+  } catch (e) { alert('B站登录失败: ' + e.message); }
 }
 
 function previewVideo (path) {

@@ -1,24 +1,20 @@
-"""B站开放平台 — 视频自动上传与发布.
-
-使用前需在 B站开放平台 (https://openhome.bilibili.com) 注册开发者账号并创建应用.
-"""
+"""B站个人账号发布 — bilibili-api-python，扫码登录，上传+发布视频."""
 import os
 import json
 import time
-import hashlib
 import logging
+import subprocess
 from typing import Optional
-from urllib.parse import urlencode
-
-import httpx
 
 logger = logging.getLogger("bilibili_publisher")
 
-BILIBILI_APP_KEY = os.environ.get("BILIBILI_APP_KEY", "")
-BILIBILI_APP_SECRET = os.environ.get("BILIBILI_APP_SECRET", "")
-BILIBILI_REFRESH_TOKEN = os.environ.get("BILIBILI_REFRESH_TOKEN", "")
-
-API_BASE = "https://api.bilibili.com/x"
+BILIBILI_CREDENTIAL_PATH = os.environ.get(
+    "BILIBILI_CREDENTIAL_PATH",
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "bilibili_credential.json",
+    ),
+)
 
 
 class BilibiliError(Exception):
@@ -26,177 +22,118 @@ class BilibiliError(Exception):
 
 
 class BilibiliPublisher:
-    """B站视频发布客户端."""
+    """B站视频发布客户端（个人账号，扫码登录）。"""
 
-    def __init__(
-        self,
-        app_key: str = BILIBILI_APP_KEY,
-        app_secret: str = BILIBILI_APP_SECRET,
-        refresh_token: str = BILIBILI_REFRESH_TOKEN,
-    ):
-        self.app_key = app_key
-        self.app_secret = app_secret
-        self._refresh_token = refresh_token
-        self._access_token: str = ""
-        self._client = httpx.Client(base_url=API_BASE, timeout=30.0)
+    def __init__(self):
+        self._credential = None
+        self._load_credential()
 
-    # ---- OAuth2 ----
+    # ---- 凭据管理 ----
 
-    def _refresh_access_token(self) -> str:
-        """用 refresh_token 换取新的 access_token."""
-        params = {
-            "client_id": self.app_key,
-            "client_secret": self.app_secret,
-            "grant_type": "refresh_token",
-            "refresh_token": self._refresh_token,
-        }
-        resp = self._client.post("/oauth2/token", params=params)
-        data = self._handle_response(resp)
-        self._access_token = data.get("access_token", "")
-        new_refresh = data.get("refresh_token", "")
-        if new_refresh:
-            self._refresh_token = new_refresh
-        logger.info("Bilibili access token refreshed")
-        return self._access_token
+    def _load_credential(self):
+        """从文件加载已保存的登录凭据。"""
+        path = BILIBILI_CREDENTIAL_PATH
+        if not os.path.exists(path):
+            return
+        try:
+            from bilibili_api import Credential
 
-    def _ensure_token(self):
-        """确保 access_token 有效."""
-        if not self._access_token:
-            self._refresh_access_token()
+            with open(path) as f:
+                data = json.load(f)
+            self._credential = Credential.from_cookies(data)
+            logger.info(f"已加载B站登录凭据: {path}")
+        except Exception as e:
+            logger.warning(f"加载B站凭据失败: {e}")
 
-    def _headers(self) -> dict:
-        self._ensure_token()
-        return {
-            "Authorization": f"Bearer {self._access_token}",
-            "Content-Type": "application/json",
-        }
+    def _save_credential(self):
+        """保存登录凭据到文件。"""
+        if not self._credential:
+            return
+        path = BILIBILI_CREDENTIAL_PATH
+        try:
+            cookies = self._credential.get_cookies()
+            with open(path, "w") as f:
+                json.dump({k: v for k, v in cookies.items() if v}, f, ensure_ascii=False)
+            logger.info(f"B站登录凭据已保存: {path}")
+        except Exception as e:
+            logger.warning(f"保存B站凭据失败: {e}")
 
-    # ---- 视频上传 ----
+    # ---- 登录状态 ----
 
-    def _pre_upload(self, file_name: str, file_size: int) -> dict:
-        """预上传：获取上传 URL 和参数."""
-        self._ensure_token()
-        params = {
-            "access_token": self._access_token,
-            "appkey": self.app_key,
-            "name": file_name,
-            "size": str(file_size),
-            "ts": str(int(time.time())),
-        }
-        params["sign"] = self._sign(params)
-        resp = self._client.get(
-            "https://member.bilibili.com/x/v2/video/upload/apply",
-            params=params,
-        )
-        return self._handle_response(resp)
+    @property
+    def is_logged_in(self) -> bool:
+        """凭据是否已加载（不一定有效）。"""
+        return self._credential is not None
 
-    def _sign(self, params: dict) -> str:
-        """B站 API 签名算法."""
-        keys = sorted(params.keys())
-        query = "&".join(f"{k}={params[k]}" for k in keys)
-        sign_str = query + self.app_secret
-        return hashlib.md5(sign_str.encode("utf-8")).hexdigest()
+    def check_login_valid(self) -> bool:
+        """检查凭据是否有效。"""
+        if not self._credential:
+            return False
+        try:
+            from bilibili_api import sync
+            return sync(self._credential.check_valid())
+        except Exception:
+            return False
 
-    def upload_video(self, file_path: str) -> str:
-        """上传视频文件到 B站，返回 filename (oss_key)。"""
-        file_name = os.path.basename(file_path)
-        file_size = os.path.getsize(file_path)
+    # ---- 扫码登录 ----
 
-        # 1. 预上传
-        upload_info = self._pre_upload(file_name, file_size)
-        upload_url = upload_info.get("upload_url", "")
-        if not upload_url:
-            raise BilibiliError("预上传失败：未获取到 upload_url")
-
-        logger.info("Bilibili pre-upload done, uploading %s (%d bytes)...", file_name, file_size)
-
-        # 2. 上传文件内容到预签名 URL
-        with open(file_path, "rb") as f:
-            resp = httpx.put(upload_url, content=f, timeout=600.0)
-        if resp.status_code not in (200, 201):
-            raise BilibiliError(f"文件上传失败: HTTP {resp.status_code}")
-
-        # 3. 上传完成确认
-        confirm_params = {
-            "access_token": self._access_token,
-            "appkey": self.app_key,
-            "upload_id": upload_info.get("upload_id", ""),
-            "ts": str(int(time.time())),
-            "biz_id": upload_info.get("biz_id", ""),
-        }
-        confirm_params["sign"] = self._sign(confirm_params)
-        confirm_resp = self._client.post(
-            "https://member.bilibili.com/x/v2/video/upload/complete",
-            params=confirm_params,
-        )
-        confirm_data = self._handle_response(confirm_resp)
-        filename = confirm_data.get("filename", "") or confirm_data.get("oss_key", "")
-        logger.info("Bilibili upload complete, filename=%s", filename)
-        return filename
-
-    # ---- 视频创建 ----
-
-    def create_video(
-        self,
-        title: str,
-        description: str,
-        filename: str,
-        tags: Optional[list] = None,
-        tid: int = 174,  # 默认分区：生活 > 日常
-        source: str = "",
-        copyright_type: int = 1,  # 1=自制, 2=转载
-    ) -> dict:
-        """创建视频投稿.
+    def generate_qrcode(self, output_dir: str = "") -> dict:
+        """生成登录二维码，不等待扫码。
 
         Args:
-            title: 视频标题
-            description: 视频简介
-            filename: 上传后得到的 filename (oss_key)
-            tags: 标签列表
-            tid: 分区 ID (默认 174=生活-日常)
-            source: 转载来源
-            copyright_type: 1=自制, 2=转载
+            output_dir: 二维码图片输出目录（默认凭据文件所在目录）
 
         Returns:
-            { "aid": int, "bvid": str, "url": str }
+            {"image_path": str, "qr_key": str, "url": str}
+            或失败时 {"error": str}
         """
-        self._ensure_token()
-        if tags is None:
-            tags = ["漫剧", "AI生成"]
+        from bilibili_api import sync
+        from bilibili_api.login_v2 import QrCodeLogin
 
-        data = {
-            "access_token": self._access_token,
-            "appkey": self.app_key,
-            "build": 1002000,
-            "copyright": copyright_type,
-            "desc": description,
-            "dynamic": "",
-            "filename": filename,
-            "no_reprint": 0,
-            "open_elec": 0,
-            "open_subtitle": 0,
-            "platform": "web",
-            "source": source,
-            "tag": ",".join(tags),
-            "tid": tid,
-            "title": title,
-            "ts": str(int(time.time())),
-        }
-        data["sign"] = self._sign(data)
+        try:
+            qr = QrCodeLogin()
+            sync(qr.generate_qrcode())
+        except Exception as e:
+            return {"error": f"生成二维码失败: {e}"}
 
-        resp = self._client.post("/v2/video/create", data=data)
-        result = self._handle_response(resp)
+        if not output_dir:
+            output_dir = os.path.dirname(BILIBILI_CREDENTIAL_PATH)
 
-        aid = result.get("aid", 0)
-        bvid = result.get("bvid", "")
-        logger.info("Bilibili video created: aid=%s, bvid=%s", aid, bvid)
-        return {
-            "aid": aid,
-            "bvid": bvid,
-            "url": f"https://www.bilibili.com/video/{bvid}" if bvid else "",
-        }
+        os.makedirs(output_dir, exist_ok=True)
+        img_path = os.path.join(output_dir, "bilibili_qrcode.png")
 
-    # ---- 发布（上传 + 创建） ----
+        pic = qr.get_qrcode_picture()
+        with open(img_path, "wb") as f:
+            f.write(pic.content)
+
+        # 终端也打印一份
+        try:
+            qr.get_qrcode_terminal()
+        except Exception:
+            pass
+
+        logger.info(f"B站二维码已生成: {img_path}")
+        return {"image_path": img_path, "url": "see image_path"}
+
+    def _complete_login(self):
+        """完成登录（由子类或外部在扫码后调用）。"""
+        # 重新加载凭据（扫码后 save_credential 会被其他流程调用）
+        self._load_credential()
+
+    # ---- 发布 ----
+
+    def _refresh_credential(self):
+        """检查并刷新凭据."""
+        from bilibili_api import sync
+
+        try:
+            valid = sync(self._credential.check_valid())
+            if not valid:
+                sync(self._credential.refresh())
+                self._save_credential()
+        except Exception as e:
+            self._credential = None
+            raise BilibiliError(f"B站登录凭据已失效，请重新登录: {e}")
 
     def publish(
         self,
@@ -205,49 +142,131 @@ class BilibiliPublisher:
         description: str = "",
         tags: Optional[list] = None,
         tid: int = 174,
-        copyright_type: int = 1,
+        copyright: int = 2,
     ) -> dict:
-        """一键上传并发布视频到 B站.
+        """通过 Playwright 浏览器自动化上传并发布视频到 B站。
+
+        B站已全面关闭个人账号的 API 直接发布接口（code 21150），
+        此方法使用 Playwright 操控浏览器 UI 完成投稿，绕过风控。
+
+        Args:
+            file_path: 视频文件路径
+            title: 视频标题
+            description: 视频简介
+            tags: 标签列表
+            tid: 分区 ID (默认 174=生活-日常)
+            copyright: 1=自制 2=转载
 
         Returns:
-            { "aid": int, "bvid": str, "url": str }
+            {"bvid": str, "url": str}
         """
-        filename = self.upload_video(file_path)
-        return self.create_video(
+        if not self.is_logged_in:
+            raise BilibiliError("B站未登录，请先扫码登录")
+
+        self._refresh_credential()
+
+        # 使用 Playwright 浏览器自动化完成上传+发布
+        from .bilibili_browser_publisher import publish_video_sync
+
+        logger.info(f"通过浏览器发布: {title}")
+        result = publish_video_sync(
+            file_path=file_path,
             title=title,
-            description=description,
-            filename=filename,
-            tags=tags,
+            description=description or f"AI 生成的漫剧视频 - {title}",
+            tags=tags or ["漫剧", "AI视频", "AI生成"],
             tid=tid,
-            copyright_type=copyright_type,
+            copyright=copyright,
         )
 
-    # ---- 辅助 ----
+        if result.get("bvid"):
+            logger.info(f"浏览器发布成功: {result['bvid']}")
+        else:
+            logger.info("浏览器发布完成（可能为草稿）")
 
-    @staticmethod
-    def _handle_response(resp: httpx.Response) -> dict:
-        """解析 B站 API 响应."""
-        try:
-            data = resp.json()
-        except Exception:
-            raise BilibiliError(f"Bilibili API 响应异常: HTTP {resp.status_code}")
-
-        if data.get("code", -1) != 0:
-            msg = data.get("message", "未知错误")
-            raise BilibiliError(f"Bilibili API 错误: {msg} (code={data.get('code')})")
-
-        return data.get("data", {})
+        return result
 
 
 # 全局单例
 _publisher: Optional[BilibiliPublisher] = None
+_active_qr_login = None  # 当前活跃的二维码登录
 
 
 def get_publisher() -> Optional[BilibiliPublisher]:
-    """获取 BilibiliPublisher 实例（未配置时返回 None）。"""
+    """获取 BilibiliPublisher 实例。"""
     global _publisher
-    if not BILIBILI_APP_KEY or not BILIBILI_APP_SECRET or not BILIBILI_REFRESH_TOKEN:
-        return None
     if _publisher is None:
         _publisher = BilibiliPublisher()
     return _publisher
+
+
+def generate_qrcode_login(output_dir: str = "") -> dict:
+    """生成二维码并存储登录会话，供后续 check_qrcode_login() 完成登录。
+
+    Args:
+        output_dir: 二维码图片输出目录
+
+    Returns:
+        {"image_path": str, ...}
+    """
+    global _active_qr_login
+
+    from bilibili_api import sync
+    from bilibili_api.login_v2 import QrCodeLogin
+
+    try:
+        qr = QrCodeLogin()
+        sync(qr.generate_qrcode())
+    except Exception as e:
+        return {"error": f"生成二维码失败: {e}"}
+
+    if not output_dir:
+        output_dir = os.path.dirname(BILIBILI_CREDENTIAL_PATH)
+    os.makedirs(output_dir, exist_ok=True)
+
+    img_path = os.path.join(output_dir, "bilibili_qrcode.png")
+    pic = qr.get_qrcode_picture()
+    with open(img_path, "wb") as f:
+        f.write(pic.content)
+
+    try:
+        qr.get_qrcode_terminal()
+    except Exception:
+        pass
+
+    _active_qr_login = qr
+    logger.info(f"B站二维码已生成: {img_path}")
+    return {"image_path": img_path, "qr_key": _active_qr_login._QrCodeLogin__qr_key}
+
+
+def check_qrcode_login() -> dict:
+    """检查当前二维码登录状态，完成登录后保存凭据。
+
+    Returns:
+        {"status": "scanning"|"done"|"timeout"|"error", ...}
+    """
+    global _active_qr_login
+    from bilibili_api import sync
+    from bilibili_api.login_v2 import QrCodeLoginEvents
+
+    if _active_qr_login is None:
+        return {"status": "error", "message": "未生成二维码"}
+
+    try:
+        state = sync(_active_qr_login.check_state())
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+    if state == QrCodeLoginEvents.DONE:
+        credential = _active_qr_login.get_credential()
+        pub = get_publisher()
+        pub._credential = credential
+        pub._save_credential()
+        _active_qr_login = None
+        return {"status": "done", "message": "登录成功"}
+    elif state == QrCodeLoginEvents.SCAN:
+        return {"status": "scanning", "message": "已扫码，等待确认"}
+    elif state == QrCodeLoginEvents.TIMEOUT:
+        _active_qr_login = None
+        return {"status": "timeout", "message": "二维码已过期"}
+    else:
+        return {"status": "scanning", "message": "等待扫码"}

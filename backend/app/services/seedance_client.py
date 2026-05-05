@@ -1,8 +1,11 @@
 """Seedance 2.0 API 客户端 — 火山引擎视频生成."""
+import logging
 import os
 import time
 import httpx
 from typing import Dict, List, Optional
+
+logger = logging.getLogger("seedance_client")
 
 from dotenv import load_dotenv
 _ENV_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), ".env")
@@ -104,21 +107,26 @@ class SeedanceClient:
         raise SeedanceError(f"Video generation timed out after {max_wait}s")
 
     def download_video(self, video_url: str, output_path: str) -> str:
-        """下载生成的视频到本地（若配置了 SMB 则写入 Windows 共享，不占 VM 磁盘）。"""
+        """下载生成的视频，先存本地，再异步尝试 SMB（不阻塞）。"""
         resp = httpx.get(video_url, timeout=120.0, follow_redirects=True)
         resp.raise_for_status()
         content = resp.content
 
-        # SMB 远程存储（不占 VM 磁盘）
+        # 1) 始终存本地（前端通过 /uploads/ 静态服务可访问）
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, "wb") as f:
+            f.write(content)
+        logger.info("Video saved locally: %s (%d MB)", output_path, len(content) / 1024 / 1024)
+
+        # 2) 若配置了 SMB，额外异步写入（不阻塞后续流程）
         if os.environ.get("SMB_HOST") and os.environ.get("SMB_PASSWORD"):
-            from app.services.smb_storage import smb_write
-            smb_write(output_path, content)
-            logger.info("Video saved to SMB: %s", output_path)
-        else:
-            # 本地存储（兜底）
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            with open(output_path, "wb") as f:
-                f.write(content)
+            try:
+                from app.services.smb_storage import smb_write
+                smb_write(output_path, content)
+                logger.info("Video also saved to SMB: %s", output_path)
+            except Exception as e:
+                logger.warning("SMB write failed (non-fatal): %s", e)
+
         return output_path
 
     def create_and_download(
