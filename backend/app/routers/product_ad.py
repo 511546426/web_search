@@ -317,7 +317,7 @@ def _generate_ad_script(product: ProductInfoRequest) -> dict:
 
 IMPORTANT: The visual analysis above describes EXACTLY what the product looks like in the uploaded photos.
 - Product appearance (color, shape, material, details): strictly follow the analysis, do NOT invent features.
-- Scene backgrounds: do NOT copy the photo's background. Design rich, real-world environments that match the product's style and target audience. Use at least 3-4 different locations across all scenes.
+- Scene backgrounds: do NOT copy the photo's plain studio background. Use ONE unified real-world location for the whole video (see CRITICAL RULE 2 below), with different spots/camera angles inside that location.
 
 Product info:
 - Name: {product.name}
@@ -332,6 +332,7 @@ CRITICAL RULES:
 1. Product features (product_focus) must reference actual features from the visual analysis — do NOT describe anything not mentioned.
 2. This is a single continuous 15-second video. ALL scenes must take place in ONE unified real-world location (e.g. a café, a park, a city street). NEVER use plain/solid color backgrounds or studio backdrops. Different scenes show different camera angles and product details within the SAME environment.
 3. Choose one location that best matches the product's style and target audience. Within that location, scenes can use different spots (e.g. terrace → counter → window seat of the same café).
+4. If the visual analysis mentions a logo, trademark, chest graphic, or woven label: dedicate at least ONE scene to a close-up shot whose product_focus and camera_angle quote those concrete details (shape, colors, placement, embroidery vs print). Do NOT substitute a vague phrase like "small logo" if the analysis gave specifics.
 
 Total video duration: ~15 seconds. Return ONLY the JSON, no markdown fences, no extra text."""
 
