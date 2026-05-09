@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>漫剧管理面板</title>
-<link rel="stylesheet" href="/css/comic-admin.css?v=20260505-1">
+<link rel="stylesheet" href="/css/comic-admin.css?v=20260508-1">
 </head>
 <body>
 <div class="app">
@@ -21,6 +21,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="scripts">剧本列表</button>
     <button class="tab" data-tab="videos">视频队列</button>
+    <button class="tab" data-tab="novels">AI小说</button>
     <button class="tab" data-tab="product">商品带货</button>
     <button class="tab" data-tab="publish">发布管理</button>
   </nav>
@@ -57,6 +58,21 @@
   <!-- 剧本列表 -->
   <section class="panel active" id="scriptsPanel">
     <div class="card-list" id="scriptList"></div>
+  </section>
+
+  <!-- AI小说 -->
+  <section class="panel" id="novelsPanel">
+    <div class="novel-upload-area">
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
+        <input id="novelTitle" placeholder="小说标题" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); flex:1;">
+        <input id="novelGenre" placeholder="类型（修仙/都市/科幻/悬疑）" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); width:160px;">
+        <input id="novelTheme" placeholder="一句话核心创意" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); width:240px;">
+        <input id="novelChapters" type="number" value="30" min="10" max="1000" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); width:80px;">
+        <button id="createNovelBtn" class="btn btn-primary">创建小说</button>
+      </div>
+    </div>
+    <h3>小说列表</h3>
+    <div class="card-list" id="novelList"></div>
   </section>
 
   <!-- 视频队列 -->
@@ -123,6 +139,17 @@
     <div class="card-list" id="trendingList"></div>
   </section>
 
+  <!-- 小说阅读 Modal -->
+  <div class="modal-overlay" id="novelModal">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2 id="novelModalTitle">小说阅读</h2>
+        <button class="modal-close" id="novelModalClose">&times;</button>
+      </div>
+      <div class="modal-body novel-reader" id="novelModalBody"></div>
+    </div>
+  </div>
+
   <!-- 剧本详情 Modal -->
   <div class="modal-overlay" id="detailModal">
     <div class="modal">
@@ -146,6 +173,6 @@
   </div>
 </div>
 
-<script src="/js/comic-admin.js?v=20260505-1"></script>
+<script src="/js/comic-admin.js?v=20260508-1"></script>
 </body>
 </html>

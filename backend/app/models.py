@@ -85,3 +85,40 @@ class PublishLog(Base):
     publish_message = Column(Text, nullable=True)
     published_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Novel(Base):
+    """小说作品."""
+    __tablename__ = "novels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    author = Column(String(100), default="AI")
+    genre = Column(String(50), nullable=True)
+    theme = Column(Text, nullable=True)
+    outline = Column(Text, nullable=True)  # JSON: 分章大纲
+    world_setting = Column(Text, nullable=True)  # JSON: 世界观
+    character_profiles = Column(Text, nullable=True)  # JSON: 角色设定
+    world_state = Column(Text, nullable=True)  # JSON: 当前故事状态
+    error_message = Column(Text, nullable=True)
+    total_chapters = Column(Integer, default=30)
+    status = Column(String(30), default="draft", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class NovelChapter(Base):
+    """小说章节."""
+    __tablename__ = "novel_chapters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    novel_id = Column(Integer, ForeignKey("novels.id"), nullable=False, index=True)
+    chapter_number = Column(Integer, nullable=False)
+    title = Column(String(200), nullable=True)
+    content = Column(Text, nullable=True)
+    word_count = Column(Integer, default=0)
+    status = Column(String(30), default="pending", index=True)
+    review_score = Column(Float, nullable=True)
+    review_attempts = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

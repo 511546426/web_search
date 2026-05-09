@@ -85,17 +85,46 @@ def chat_json(
     model: Optional[str] = None,
     temperature: float = 0.7,
     max_tokens: int = 4096,
+    timeout: float = 120.0,
     image_paths: Optional[List[str]] = None,
 ) -> Dict:
     """发送对话请求，返回解析后的 JSON。支持 image_paths 多模态."""
-    text = chat(user_message, system, model, temperature, max_tokens, image_paths=image_paths)
+    text = chat(user_message, system, model, temperature, max_tokens, timeout=timeout, image_paths=image_paths)
     text = text.strip()
     if text.startswith("```"):
         lines = text.split("\n")
         text = "\n".join(lines[1:]) if len(lines) > 1 else text
     if text.endswith("```"):
         text = text[: text.rfind("```")].strip()
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # 轻量修复：去掉数字后的中文注释 1（但实际战力可达3阶水平）→ 1
+    import re
+    text = re.sub(r'(?<=[0-9])（[^）]*）', '', text)
+    # 移除 trailing comma before } or ]
+    text = re.sub(r',\s*}', '}', text)
+    text = re.sub(r',\s*\]', ']', text)
+    # 尝试闭合被截断的 JSON（补全缺失的 } 和 ]）
+    open_braces = text.count('{') - text.count('}')
+    open_brackets = text.count('[') - text.count(']')
+    # 先补方括号再补花括号，顺序不能反
+    if open_brackets > 0:
+        text += ']' * open_brackets
+    if open_braces > 0:
+        text += '}' * open_braces
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # 最后一搏：找到第一个 { 和最后一个 }，截取中间内容
+    first_brace = text.find('{')
+    last_brace = text.rfind('}')
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        text = text[first_brace:last_brace + 1]
+        return json.loads(text)
+    raise
 
 
 def chat_fast(

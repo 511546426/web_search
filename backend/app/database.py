@@ -56,3 +56,6 @@ def _run_lightweight_migrations() -> None:
     # product_ads: 旧库可能缺少评审与错误信息字段
     _add_column_if_missing("product_ads", "review_score", "review_score FLOAT")
     _add_column_if_missing("product_ads", "error_message", "error_message TEXT")
+
+    # novels: 兼容旧表
+    _add_column_if_missing("novels", "error_message", "error_message TEXT")

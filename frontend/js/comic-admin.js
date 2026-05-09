@@ -34,7 +34,7 @@ $$('.tab').forEach(t => {
     t.classList.add('active');
     $$('.panel').forEach(x => x.classList.remove('active'));
     currentTab = t.dataset.tab;
-    const panelMap = { scripts: 'scriptsPanel', videos: 'videosPanel', product: 'productPanel', publish: 'publishPanel' };
+    const panelMap = { scripts: 'scriptsPanel', videos: 'videosPanel', novels: 'novelsPanel', product: 'productPanel', publish: 'publishPanel' };
     $(`#${panelMap[currentTab]}`).classList.add('active');
     loadCurrentTab();
   });
@@ -102,6 +102,7 @@ $('#scrapeTrendingBtn').addEventListener('click', loadTrending);
 // ---- Modal ----
 $('#modalClose').addEventListener('click', () => $('#detailModal').classList.remove('active'));
 $('#adModalClose').addEventListener('click', () => $('#adDetailModal').classList.remove('active'));
+$('#novelModalClose').addEventListener('click', () => $('#novelModal').classList.remove('active'));
 
 // ---- 数据加载 ----
 async function loadStats () {
@@ -119,6 +120,7 @@ async function loadStats () {
 function loadCurrentTab () {
   if (currentTab === 'scripts') loadScripts();
   else if (currentTab === 'videos') loadVideos();
+  else if (currentTab === 'novels') loadNovels();
   else if (currentTab === 'product') { loadProductAds(); }
   else if (currentTab === 'publish') loadPublishLogs();
 }
@@ -518,6 +520,204 @@ $('#generateAdScriptBtn').addEventListener('click', async () => {
   }
   btn.disabled = false; btn.textContent = '③ 生成带货剧本';
 });
+
+// ---- 小说 ----
+
+$('#createNovelBtn').addEventListener('click', async () => {
+  const title = $('#novelTitle').value.trim();
+  if (!title) { alert('请填写小说标题'); return; }
+  const chapters = parseInt($('#novelChapters').value) || 30;
+  const btn = $('#createNovelBtn');
+  btn.disabled = true; btn.textContent = '创建中...';
+  try {
+    await api(API + '/novels', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        genre: $('#novelGenre').value.trim(),
+        theme: $('#novelTheme').value.trim(),
+        total_chapters: chapters,
+      })
+    });
+    $('#novelTitle').value = '';
+    loadNovels();
+  } catch (e) {
+    alert('创建失败: ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '创建小说';
+});
+
+async function loadNovels () {
+  try {
+    const novels = await api(API + '/novels?limit=50');
+    const el = $('#novelList');
+    if (!novels.length) {
+      el.innerHTML = '<div class="empty-state"><p>暂无小说</p><p>输入标题后点击「创建小说」开始</p></div>';
+      return;
+    }
+    el.innerHTML = novels.map(n => {
+      const progress = n.total_chapters > 0 ? Math.round(n.done_chapters / n.total_chapters * 100) : 0;
+      return `
+      <div class="card">
+        <div class="card-status ${n.status === 'completed' ? 'completed' : n.status === 'publishing' ? 'generating' : 'draft'}"></div>
+        <div class="card-body">
+          <div class="card-title">${escHtml(n.title)}</div>
+          <div class="card-meta">
+            <span>${statusLabel(n.status)}</span>
+            ${n.genre ? '<span class="tag">' + escHtml(n.genre) + '</span>' : ''}
+            <span>${n.done_chapters}/${n.total_chapters}章</span>
+            <span style="color:var(--text-dim);font-size:0.8rem;">${progress}%</span>
+            ${n.has_world ? '<span style="color:var(--success);font-size:0.8rem;">✅世界观</span>' : ''}
+            ${n.has_outline ? '<span style="color:var(--success);font-size:0.8rem;">✅大纲</span>' : ''}
+            <span>${fmtDate(n.created_at)}</span>
+          </div>
+          <div style="margin-top:6px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${progress}%;background:var(--primary);border-radius:2px;transition:width 0.3s;"></div>
+          </div>
+        </div>
+        <div class="card-actions" style="flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="viewNovel(${n.id})">查看</button>
+          ${!n.has_world ? `<button class="btn btn-sm" style="background:var(--primary);color:#fff;padding:6px 10px;" onclick="generateWorld(${n.id})">生成世界观</button>` : ''}
+          ${n.has_world && !n.has_outline ? `<button class="btn btn-sm" style="background:var(--primary);color:#fff;padding:6px 10px;" onclick="generateOutline(${n.id})">生成大纲</button>` : ''}
+          ${n.has_outline && n.done_chapters < n.total_chapters ? `<button class="btn btn-sm" style="background:var(--success);color:#fff;padding:6px 10px;" onclick="generateAllChapters(${n.id})">生成全部</button>` : ''}
+          <button class="btn btn-sm" style="background:transparent;border:1px solid var(--danger);color:var(--danger);padding:6px 8px;" onclick="deleteNovel(${n.id})" title="删除">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) { $('#novelList').innerHTML = '<div class="empty-state"><p>加载失败: ' + escHtml(e.message) + '</p></div>'; }
+}
+
+async function generateWorld (id) {
+  if (!confirm('确定生成世界观设定？将调用 AI 生成完整世界观和角色设定。')) return;
+  try {
+    const res = await api(API + '/novels/' + id + '/generate-world', { method: 'POST' });
+    alert(res.message);
+    setTimeout(loadNovels, 2000);
+  } catch (e) { alert('生成失败: ' + e.message); }
+}
+
+async function generateOutline (id) {
+  if (!confirm('确定生成分章大纲？将基于世界观生成完整章节目录。')) return;
+  try {
+    const res = await api(API + '/novels/' + id + '/generate-outline', { method: 'POST' });
+    alert(res.message);
+    setTimeout(loadNovels, 2000);
+  } catch (e) { alert('生成失败: ' + e.message); }
+}
+
+async function generateAllChapters (id) {
+  if (!confirm('确定生成全部章节？将在后台逐章生成+评审，耗时较长。')) return;
+  try {
+    const res = await api(API + '/novels/' + id + '/generate-all', { method: 'POST' });
+    alert(res.message);
+  } catch (e) { alert('触发失败: ' + e.message); }
+}
+
+async function deleteNovel (id) {
+  if (!confirm('确定删除小说 #' + id + '？（所有章节也将删除）')) return;
+  try {
+    await api(API + '/novels/' + id, { method: 'DELETE' });
+    loadNovels();
+  } catch (e) { alert('删除失败: ' + e.message); }
+}
+
+async function viewNovel (id) {
+  try {
+    const novel = await api(API + '/novels/' + id);
+    const chapters = await api(API + '/novels/' + id + '/chapters');
+
+    let chaptersHtml = '';
+    if (chapters.length) {
+      chaptersHtml = '<h3>章节目录</h3><div class="chapter-list">' +
+        chapters.map(c => `
+          <div class="chapter-item ${c.status === 'done' ? '' : 'pending'}" onclick="viewChapter(${id}, ${c.chapter_number})">
+            <span class="chapter-num">第${c.chapter_number}章</span>
+            <span class="chapter-title">${escHtml(c.title || '')}</span>
+            ${c.review_score ? `<span class="chapter-score">${c.review_score}/10</span>` : ''}
+            <span class="chapter-status">${c.status === 'done' ? '✅' : '⏳'}</span>
+            <span class="chapter-preview">${escHtml(c.preview || '')}...</span>
+          </div>
+        `).join('') + '</div>';
+    }
+
+    let worldHtml = '';
+    if (novel.world_setting) {
+      const ws = novel.world_setting;
+      const world = ws.world || {};
+      worldHtml = '<h3>世界观</h3><div class="novel-section">' +
+        `<p><strong>${escHtml(world.name || '')}</strong></p>` +
+        `<p>${escHtml(world.background || '')}</p>` +
+        (world.power_system ? `<p><strong>力量体系:</strong> ${escHtml(world.power_system.name || '')}</p>` : '') +
+        '</div>';
+    }
+
+    let charHtml = '';
+    if (novel.character_profiles && novel.character_profiles.length) {
+      charHtml = '<h3>角色设定</h3><div class="novel-section">' +
+        novel.character_profiles.map(c =>
+          `<div class="char-card">
+            <strong>${escHtml(c.name)}</strong>
+            <span class="tag">${escHtml(c.role || '')}</span>
+            <p>${escHtml(c.personality || '')}</p>
+          </div>`
+        ).join('') + '</div>';
+    }
+
+    let genBtn = '';
+    if (novel.has_outline && chapters.length < novel.total_chapters) {
+      genBtn = `<button class="btn btn-primary" onclick="generateSingleChapter(${id}, ${chapters.length + 1})" style="margin-bottom:16px;">生成下一章（第${chapters.length + 1}章）</button>`;
+    }
+
+    $('#novelModalTitle').textContent = novel.title;
+    $('#novelModalBody').innerHTML = `
+      <div style="margin-bottom:16px;">
+        ${novel.genre ? '<span class="tag">' + escHtml(novel.genre) + '</span>' : ''}
+        <span>${novel.done_chapters}/${novel.total_chapters}章</span>
+        <span>状态: ${statusLabel(novel.status)}</span>
+      </div>
+      ${genBtn}
+      ${worldHtml}
+      ${charHtml}
+      ${chaptersHtml}
+    `;
+    $('#novelModal').classList.add('active');
+  } catch (e) { alert('加载失败: ' + e.message); }
+}
+
+async function viewChapter (novelId, chapterNum) {
+  try {
+    const ch = await api(API + '/novels/' + novelId + '/chapters/' + chapterNum);
+    if (!ch.content) {
+      if (!confirm('本章尚未生成，是否现在生成？')) return;
+      const res = await api(API + '/novels/' + novelId + '/generate-chapter/' + chapterNum, { method: 'POST' });
+      alert('生成完成，评分: ' + (res.review_score || 'N/A') + '/10');
+      viewNovel(novelId);
+      return;
+    }
+    $('#novelModalTitle').textContent = `第${ch.chapter_number}章 ${ch.title || ''}`;
+    $('#novelModalBody').innerHTML = `
+      <div style="margin-bottom:16px;color:var(--text-dim);font-size:0.85rem;">
+        ${ch.word_count > 0 ? Math.round(ch.word_count / 100) / 10 + '千字' : ''}
+        ${ch.review_score ? ' | 评分: ' + ch.review_score + '/10' : ''}
+      </div>
+      <div class="chapter-content">${escHtml(ch.content).replace(/\n/g, '<br>')}</div>
+      <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;">
+        ${chapterNum > 1 ? `<button class="btn btn-outline btn-sm" onclick="viewChapter(${novelId}, ${chapterNum - 1})">← 上一章</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="viewNovel(${novelId})">返回目录</button>
+        <button class="btn btn-outline btn-sm" onclick="viewChapter(${novelId}, ${chapterNum + 1})">下一章 →</button>
+      </div>
+    `;
+  } catch (e) { alert('加载失败: ' + e.message); }
+}
+
+async function generateSingleChapter (novelId, chapterNum) {
+  if (!confirm(`确定生成第 ${chapterNum} 章？将自动评审并修改直到达标。`)) return;
+  try {
+    const res = await api(API + '/novels/' + novelId + '/generate-chapter/' + chapterNum, { method: 'POST' });
+    alert(`第${chapterNum}章生成完成，评分: ${res.review_score || 'N/A'}/10`);
+    viewNovel(novelId);
+  } catch (e) { alert('生成失败: ' + e.message); }
+}
 
 // 加载带货剧本列表
 async function loadProductAds () {

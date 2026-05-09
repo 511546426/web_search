@@ -306,6 +306,42 @@ header h1 {
 .photo-thumb:hover { border-color: var(--primary); }
 .photo-thumb.selected { border-color: var(--success); }
 
+/* novel */
+.modal-wide { max-width: 900px !important; }
+.novel-section { background: rgba(0,0,0,0.2); padding: 14px; border-radius: 8px; margin-bottom: 12px; }
+.char-card { background: rgba(124,58,237,0.1); padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid var(--primary); }
+.char-card p { margin-top: 4px; font-size: 0.85rem; color: var(--text-dim); }
+
+.chapter-list { display: flex; flex-direction: column; gap: 6px; max-height: 500px; overflow-y: auto; }
+.chapter-item {
+  display: grid; grid-template-columns: 80px 1fr 60px 30px;
+  gap: 8px; align-items: center;
+  padding: 10px 14px; background: rgba(0,0,0,0.2);
+  border-radius: 8px; cursor: pointer;
+  transition: background 0.2s;
+}
+.chapter-item:hover { background: rgba(124,58,237,0.15); }
+.chapter-item.pending { opacity: 0.5; cursor: default; }
+.chapter-num { font-weight: 600; color: var(--primary); font-size: 0.85rem; }
+.chapter-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter-score { font-size: 0.8rem; color: var(--success); text-align: center; }
+.chapter-status { text-align: center; font-size: 0.85rem; }
+.chapter-preview { grid-column: 1 / -1; font-size: 0.8rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.chapter-content {
+  font-size: 1rem; line-height: 2;
+  color: var(--text); max-height: 70vh; overflow-y: auto;
+  padding: 0 8px;
+}
+
+.novel-upload-area {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
 /* responsive */
 @media (max-width: 640px) {
   .card { flex-direction: column; align-items: flex-start; }

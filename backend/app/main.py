@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routers import auth, comic_videos, coze_api, product_ad
+from app.routers import auth, comic_videos, coze_api, novels, product_ad
 from app.tasks.scheduler import start_scheduler, stop_scheduler
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,6 +43,7 @@ app.include_router(auth.router)
 app.include_router(comic_videos.router)
 app.include_router(coze_api.router)
 app.include_router(product_ad.router)
+app.include_router(novels.router)
 
 
 @app.get("/api/health")
