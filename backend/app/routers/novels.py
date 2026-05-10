@@ -394,12 +394,13 @@ def generate_all_chapters(novel_id: int, db: Session = Depends(get_db)):
                 .all()
             }
 
-            for chapter_info in chapters_list:
-                num = chapter_info.get("number")
+            # 从 1 循环到 total_chapters，大纲中找不到的章节用默认信息
+            for num in range(1, n.total_chapters + 1):
                 if num in existing:
                     continue
-                if num > n.total_chapters:
-                    break
+                chapter_info = next((c for c in chapters_list if c.get("number") == num), {})
+                if not chapter_info:
+                    chapter_info = {"number": num, "title": f"第{num}章", "summary": ""}
 
                 logger.info(f"Generating chapter {num}/{n.total_chapters}...")
 
