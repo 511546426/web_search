@@ -525,7 +525,6 @@ $('#generateAdScriptBtn').addEventListener('click', async () => {
 
 $('#createNovelBtn').addEventListener('click', async () => {
   const title = $('#novelTitle').value.trim();
-  if (!title) { alert('请填写小说标题'); return; }
   const chapters = parseInt($('#novelChapters').value) || 30;
   const btn = $('#createNovelBtn');
   btn.disabled = true; btn.textContent = '创建中...';

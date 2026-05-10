@@ -16,19 +16,36 @@ logger = logging.getLogger("novels")
 router = APIRouter(prefix="/api/comic/novels", tags=["novels"])
 
 
+def _auto_title(genre: str, theme: str) -> str:
+    """根据题材和创意用 AI 生成小说标题，失败时用默认名。"""
+    if not genre and not theme:
+        return "未命名作品"
+    try:
+        from app.services.deepseek_client import chat_fast
+        prompt = f"为一部{genre or '未指定'}题材的小说起一个标题，核心创意是：{theme or '无'}。只输出标题本身，不要多余文字，10字以内。"
+        title = chat_fast(prompt, temperature=0.8, max_tokens=50).strip().strip('"').strip('「」')
+        if title:
+            return title[:50]
+    except Exception:
+        pass
+    return f"未命名{genre or '小说'}"
+
+
 # ---- 创建与列表 ----
 
 @router.post("", status_code=201)
 def create_novel(body: dict, db: Session = Depends(get_db)):
-    """创建新小说项目."""
+    """创建新小说项目。标题为空时按题材+创意自动生成标题。"""
     title = body.get("title", "").strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="请填写小说标题")
+    genre = body.get("genre", "").strip()
+    theme = body.get("theme", "").strip()
 
+    if not title:
+        title = _auto_title(genre, theme)
     novel = Novel(
         title=title,
-        genre=body.get("genre", ""),
-        theme=body.get("theme", ""),
+        genre=genre,
+        theme=theme,
         total_chapters=body.get("total_chapters", 30),
         status="draft",
     )
