@@ -123,8 +123,12 @@ def chat_json(
     last_brace = text.rfind('}')
     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
         text = text[first_brace:last_brace + 1]
-        return json.loads(text)
-    raise
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+    # 全部解析失败时返回空字典，避免业务代码崩溃
+    return {}
 
 
 def chat_fast(

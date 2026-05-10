@@ -447,6 +447,10 @@ def auto_review_chapter_loop(
         if verdict == "passed":
             return text, review
 
+        if verdict == "revise" and score >= 7.5:
+            # 7.5 分以上直接过，不触发修改循环以节省时间
+            return text, review
+
         if verdict == "revise":
             text = revise_chapter_text(text, review, character_profiles, prev_world_state)
             continue
