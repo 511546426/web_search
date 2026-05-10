@@ -468,6 +468,43 @@ def list_chapters(novel_id: int, db: Session = Depends(get_db)):
     ]
 
 
+@router.get("/{novel_id}/download")
+def download_novel(novel_id: int, db: Session = Depends(get_db)):
+    """导出小说全文为 TXT 文件下载."""
+    novel = db.query(Novel).filter(Novel.id == novel_id).first()
+    if not novel:
+        raise HTTPException(status_code=404, detail="小说不存在")
+
+    chapters = (
+        db.query(NovelChapter)
+        .filter(NovelChapter.novel_id == novel_id, NovelChapter.status == "done")
+        .order_by(NovelChapter.chapter_number.asc())
+        .all()
+    )
+
+    lines = [f"{novel.title}", "=" * len(novel.title), ""]
+    total_words = 0
+    for ch in chapters:
+        title = ch.title or f"第{ch.chapter_number}章"
+        lines.append(f"\n第{ch.chapter_number}章 {title}")
+        lines.append("-" * (len(title) + 4 + len(str(ch.chapter_number))))
+        lines.append("")
+        lines.append(ch.content or "")
+        lines.append("")
+        total_words += ch.word_count or 0
+
+    text = "\n".join(lines)
+    from fastapi.responses import StreamingResponse
+    filename = f"{novel.title}-{len(chapters)}章.txt"
+    import urllib.parse
+    encoded_filename = urllib.parse.quote(filename)
+    return StreamingResponse(
+        iter([text.encode("utf-8")]),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
+    )
+
+
 @router.get("/{novel_id}/chapters/{chapter_number}")
 def get_chapter(novel_id: int, chapter_number: int, db: Session = Depends(get_db)):
     """获取单章完整内容."""

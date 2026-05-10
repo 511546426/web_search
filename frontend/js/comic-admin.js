@@ -576,6 +576,7 @@ async function loadNovels () {
         </div>
         <div class="card-actions" style="flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="viewNovel(${n.id})">查看</button>
+          ${n.done_chapters > 0 ? `<button class="btn btn-outline btn-sm" onclick="downloadNovel(${n.id})">下载</button>` : ''}
           ${!n.has_world ? `<button class="btn btn-sm" style="background:var(--primary);color:#fff;padding:6px 10px;" onclick="generateWorld(${n.id})">生成世界观</button>` : ''}
           ${n.has_world && !n.has_outline ? `<button class="btn btn-sm" style="background:var(--primary);color:#fff;padding:6px 10px;" onclick="generateOutline(${n.id})">生成大纲</button>` : ''}
           ${n.has_outline && n.done_chapters < n.total_chapters ? `<button class="btn btn-sm" style="background:var(--success);color:#fff;padding:6px 10px;" onclick="generateAllChapters(${n.id})">生成全部</button>` : ''}
@@ -618,6 +619,10 @@ async function deleteNovel (id) {
     await api(API + '/novels/' + id, { method: 'DELETE' });
     loadNovels();
   } catch (e) { alert('删除失败: ' + e.message); }
+}
+
+async function downloadNovel (id) {
+  window.open(API + '/novels/' + id + '/download', '_blank');
 }
 
 async function viewNovel (id) {
@@ -669,10 +674,11 @@ async function viewNovel (id) {
 
     $('#novelModalTitle').textContent = novel.title;
     $('#novelModalBody').innerHTML = `
-      <div style="margin-bottom:16px;">
+      <div style="margin-bottom:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         ${novel.genre ? '<span class="tag">' + escHtml(novel.genre) + '</span>' : ''}
         <span>${novel.done_chapters}/${novel.total_chapters}章</span>
         <span>状态: ${statusLabel(novel.status)}</span>
+        ${novel.done_chapters > 0 ? `<button class="btn btn-outline btn-sm" onclick="downloadNovel(${id})" style="margin-left:auto;">📥 下载TXT</button>` : ''}
       </div>
       ${genBtn}
       ${worldHtml}
