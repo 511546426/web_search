@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>漫剧管理面板</title>
-<link rel="stylesheet" href="/css/comic-admin.css?v=20260511-3">
+<link rel="stylesheet" href="/css/comic-admin.css?v=20260511-6">
 </head>
 <body>
 <div class="app">
@@ -51,7 +51,23 @@
 
   <!-- 商品带货 -->
   <section class="panel" id="productPanel">
-    <!-- 步骤指示器 -->
+    <!-- 列表视图（默认） -->
+    <div id="productListView">
+      <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <h3 style="margin:0;">带货剧本</h3>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" id="refreshProductBtn">⟳ 刷新</button>
+          <button class="btn btn-primary btn-sm" id="newProductBtn">+ 新建带货</button>
+        </div>
+      </div>
+      <div class="card-list" id="productAdList"></div>
+    </div>
+    <!-- 步骤流程视图（隐藏） -->
+    <div id="productStepFlow" style="display:none;">
+      <div style="margin-bottom:16px;">
+        <button class="btn btn-ghost btn-sm" id="backToProductListBtn">← 返回列表</button>
+      </div>
+      <!-- 步骤指示器 -->
     <div class="step-indicator" id="stepIndicator">
       <div class="step step-active" data-step="1">
         <span class="step-circle">1</span>
@@ -207,6 +223,7 @@
         </div>
       </div>
     </div>
+    </div><!-- /productStepFlow -->
   </section>
 
   <!-- 发布管理 -->
@@ -261,6 +278,24 @@
     </div>
   </div>
 
+  <!-- 小说反馈重试 Modal -->
+  <div class="modal-overlay" id="novelFeedbackModal">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-header">
+        <h2 id="novelFeedbackTitle">重新生成</h2>
+        <button class="modal-close" onclick="closeNovelFeedback()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:12px;">对当前内容不满意？提修改意见，AI 会据此优化：</p>
+        <textarea id="novelFeedbackInput" placeholder="例如：主角性格要更强势一些、增加更多打斗描写、世界观的体系需要更具体..." style="width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:rgba(0,0,0,0.3);color:var(--text-primary);font-family:inherit;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="closeNovelFeedback()">取消</button>
+        <button class="btn btn-primary" id="doNovelFeedbackBtn">重新生成</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 剧本详情 Modal -->
   <div class="modal-overlay" id="detailModal">
     <div class="modal">
@@ -273,6 +308,6 @@
   </div>
 </div>
 
-<script src="/js/comic-admin.js?v=20260511-3"></script>
+<script src="/js/comic-admin.js?v=20260511-6"></script>
 </body>
 </html>

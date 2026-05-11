@@ -66,3 +66,4 @@ def _run_lightweight_migrations() -> None:
 
     # novels: 兼容旧表
     _add_column_if_missing("novels", "error_message", "error_message TEXT")
+    _add_column_if_missing("novels", "user_feedback", "user_feedback TEXT")

@@ -107,6 +107,7 @@ class Novel(Base):
     character_profiles = Column(Text, nullable=True)  # JSON: 角色设定
     world_state = Column(Text, nullable=True)  # JSON: 当前故事状态
     error_message = Column(Text, nullable=True)
+    user_feedback = Column(Text, nullable=True)
     total_chapters = Column(Integer, default=30)
     status = Column(String(30), default="draft", index=True)
     created_at = Column(DateTime, default=datetime.utcnow)

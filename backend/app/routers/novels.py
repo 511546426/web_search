@@ -442,6 +442,191 @@ def generate_all_chapters(novel_id: int, db: Session = Depends(get_db)):
     return {"message": "全部章节生成已触发，将在后台逐章生成"}
 
 
+# ---- 重试（带用户反馈）----
+
+@router.post("/{novel_id}/retry-world")
+def retry_world(novel_id: int, body: dict = None, db: Session = Depends(get_db)):
+    """根据用户反馈重新生成世界观和角色设定。"""
+    novel = db.query(Novel).filter(Novel.id == novel_id).first()
+    if not novel:
+        raise HTTPException(status_code=404, detail="小说不存在")
+
+    feedback = (body or {}).get("feedback", "")
+    novel.user_feedback = feedback
+    db.commit()
+
+    from app.services.novel_writer import generate_world as _generate_world
+    from json import JSONDecodeError
+
+    def _run():
+        _db = next(get_db())
+        try:
+            n = _db.query(Novel).filter(Novel.id == novel_id).first()
+            if not n:
+                return
+            last_error = None
+            for attempt in range(2):
+                try:
+                    result = _generate_world(
+                        topic=f"{n.title} {n.theme or ''}",
+                        genre=n.genre or "",
+                        total_chapters=n.total_chapters,
+                        user_feedback=feedback,
+                    )
+                    last_error = None
+                    break
+                except (JSONDecodeError, Exception) as e:
+                    last_error = str(e)
+                    logger.warning(f"World retry attempt {attempt+1} failed: {e}")
+                    continue
+            if last_error:
+                raise Exception(last_error)
+            n.error_message = None
+            n.world_setting = json.dumps(result, ensure_ascii=False)
+            if result.get("characters"):
+                n.character_profiles = json.dumps(result["characters"], ensure_ascii=False)
+            _db.commit()
+            logger.info(f"World retry done for novel {novel_id}")
+        except Exception as e:
+            logger.exception(f"World retry failed for novel {novel_id}: {e}")
+        finally:
+            _db.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"message": "世界观重新生成已触发，请稍后刷新查看"}
+
+
+@router.post("/{novel_id}/retry-outline")
+def retry_outline(novel_id: int, body: dict = None, db: Session = Depends(get_db)):
+    """根据用户反馈重新生成大纲。"""
+    novel = db.query(Novel).filter(Novel.id == novel_id).first()
+    if not novel:
+        raise HTTPException(status_code=404, detail="小说不存在")
+    if not novel.world_setting:
+        raise HTTPException(status_code=400, detail="请先生成世界观")
+
+    feedback = (body or {}).get("feedback", "")
+    novel.user_feedback = feedback
+    db.commit()
+
+    from app.services.novel_writer import generate_outline as _generate_outline
+    from json import JSONDecodeError
+
+    def _run():
+        _db = next(get_db())
+        try:
+            n = _db.query(Novel).filter(Novel.id == novel_id).first()
+            if not n:
+                return
+            world = json.loads(n.world_setting) if n.world_setting else {}
+            characters = json.loads(n.character_profiles) if n.character_profiles else []
+            last_error = None
+            for attempt in range(2):
+                try:
+                    result = _generate_outline(world, characters, n.total_chapters, user_feedback=feedback)
+                    last_error = None
+                    break
+                except (JSONDecodeError, Exception) as e:
+                    last_error = str(e)
+                    logger.warning(f"Outline retry attempt {attempt+1} failed: {e}")
+                    continue
+            if last_error:
+                raise Exception(last_error)
+            n.error_message = None
+            n.outline = json.dumps(result, ensure_ascii=False)
+            _db.commit()
+            logger.info(f"Outline retry done for novel {novel_id}")
+        except Exception as e:
+            logger.exception(f"Outline retry failed for novel {novel_id}: {e}")
+        finally:
+            _db.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"message": "大纲重新生成已触发，请稍后刷新查看"}
+
+
+@router.post("/{novel_id}/retry-chapter/{chapter_num}")
+def retry_chapter(novel_id: int, chapter_num: int, body: dict = None, db: Session = Depends(get_db)):
+    """根据用户反馈重新生成指定章节。"""
+    novel = db.query(Novel).filter(Novel.id == novel_id).first()
+    if not novel:
+        raise HTTPException(status_code=404, detail="小说不存在")
+    if not novel.outline:
+        raise HTTPException(status_code=400, detail="请先生成大纲")
+
+    feedback = (body or {}).get("feedback", "")
+    novel.user_feedback = feedback
+    db.commit()
+
+    from app.services.novel_writer import (
+        auto_review_chapter_loop,
+        update_world_state,
+        collect_recent_chapters,
+    )
+
+    outline = json.loads(novel.outline) if isinstance(novel.outline, str) else (novel.outline or {})
+    chapters_list = outline.get("chapters", [])
+    chapter_info = next((c for c in chapters_list if c.get("number") == chapter_num), {})
+    if not chapter_info:
+        chapter_info = {"number": chapter_num, "title": f"第{chapter_num}章", "summary": ""}
+
+    prev_world_state = json.loads(novel.world_state) if novel.world_state else None
+    recent_chapters = collect_recent_chapters(db, novel_id, chapter_num)
+    character_profiles = json.loads(novel.character_profiles) if novel.character_profiles else []
+
+    novel_data = {
+        "world_setting": json.loads(novel.world_setting) if novel.world_setting else {},
+        "character_profiles": character_profiles,
+        "outline": outline,
+    }
+
+    try:
+        text, review = auto_review_chapter_loop(
+            novel_data, chapter_num, chapter_info, recent_chapters,
+            prev_world_state, user_feedback=feedback,
+        )
+    except Exception as e:
+        logger.exception(f"Chapter retry failed: {e}")
+        raise HTTPException(status_code=500, detail=f"章节重新生成失败: {e}")
+
+    new_world_state = update_world_state(prev_world_state, text, character_profiles)
+    novel.world_state = json.dumps(new_world_state, ensure_ascii=False)
+
+    existing = (
+        db.query(NovelChapter)
+        .filter(NovelChapter.novel_id == novel_id, NovelChapter.chapter_number == chapter_num)
+        .first()
+    )
+    if existing:
+        existing.content = text
+        existing.title = chapter_info.get("title", f"第{chapter_num}章")
+        existing.word_count = len(text)
+        existing.status = "done"
+        existing.review_score = review.get("overall_score")
+    else:
+        ch = NovelChapter(
+            novel_id=novel_id,
+            chapter_number=chapter_num,
+            title=chapter_info.get("title", f"第{chapter_num}章"),
+            content=text,
+            word_count=len(text),
+            status="done",
+            review_score=review.get("overall_score"),
+        )
+        db.add(ch)
+
+    db.commit()
+
+    return {
+        "chapter_number": chapter_num,
+        "title": chapter_info.get("title", f"第{chapter_num}章"),
+        "word_count": len(text),
+        "review_score": review.get("overall_score"),
+        "verdict": review.get("verdict"),
+        "status": "done",
+    }
+
+
 # ---- 章节查询 ----
 
 @router.get("/{novel_id}/chapters")

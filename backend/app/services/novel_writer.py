@@ -77,8 +77,16 @@ UPDATE_STATE_SYSTEM_PROMPT = """你是小说剧情分析师，负责维护长篇
 只更新有变化的部分，没有变化保留原样。"""
 
 
-def generate_world(topic: str, genre: str = "", total_chapters: int = 100) -> Dict:
+def generate_world(topic: str, genre: str = "", total_chapters: int = 100, user_feedback: str = "") -> Dict:
     """Step 1：生成完整世界观和角色设定."""
+    feedback_section = ""
+    if user_feedback:
+        feedback_section = f"""
+
+===== 用户修改意见 =====
+{user_feedback}
+===== 请根据以上意见调整世界观和角色设定 =====
+"""
     prompt = f"""请根据以下信息，设计一个可用于 {total_chapters}+ 章长篇连载的完整原创世界观：
 
 题材：{topic}
@@ -92,7 +100,7 @@ def generate_world(topic: str, genre: str = "", total_chapters: int = 100) -> Di
 4. 每个主要角色必须有「内在矛盾」——例如：表面自信但内心自卑 / 追求正义但手段残忍
 5. 设计至少 2 条可长期发展的伏笔线
 6. 必须是原创设定，不能照搬已有作品的体系
-
+{feedback_section}
 输出 JSON：
 {{
   "world": {{
@@ -134,9 +142,17 @@ def generate_world(topic: str, genre: str = "", total_chapters: int = 100) -> Di
 
 
 def generate_outline(
-    world_setting: Dict, character_profiles: List[Dict], total_chapters: int = 100
+    world_setting: Dict, character_profiles: List[Dict], total_chapters: int = 100, user_feedback: str = ""
 ) -> Dict:
     """Step 2：根据世界观生成完整分章大纲."""
+    feedback_section = ""
+    if user_feedback:
+        feedback_section = f"""
+
+===== 用户修改意见 =====
+{user_feedback}
+===== 请根据以上意见调整大纲结构 =====
+"""
     world_json = json.dumps(world_setting, ensure_ascii=False)
     char_json = json.dumps(character_profiles, ensure_ascii=False)
 
@@ -161,7 +177,7 @@ def generate_outline(
 - 【道德困境】主角面临真正的道德选择
 - 【反派有理】反派有自己的合理逻辑
 - 【代价法则】获得任何东西都有真实代价
-
+{feedback_section}
 输出 JSON：
 {{
   "structure": {{
@@ -217,8 +233,17 @@ def generate_chapter_text(
     recent_chapters: List[Dict],
     world_state: Optional[Dict] = None,
     word_count: int = 3000,
+    user_feedback: str = "",
 ) -> str:
     """生成单章内容."""
+    feedback_section = ""
+    if user_feedback:
+        feedback_section = f"""
+
+===== 用户修改意见 =====
+{user_feedback}
+===== 请根据以上意见调整本章内容和写法 =====
+"""
     world_setting = novel.get("world_setting", {})
     character_profiles = novel.get("character_profiles", [])
     outline = novel.get("outline", {})
@@ -264,7 +289,8 @@ def generate_chapter_text(
 1. 角色状态必须与"当前世界状态"完全一致
 2. 本章至少有一个意想不到的情节转折
 3. 结尾必须是悬念/转折/情感冲击
-4. 字数约 {word_count} 字"""
+4. 字数约 {word_count} 字
+	{feedback_section}"""
 
     return chat(prompt, system=CHAPTER_SYSTEM_PROMPT, temperature=0.85, max_tokens=4096, timeout=300)
 
@@ -349,14 +375,22 @@ def revise_chapter_text(
     review_result: Dict,
     character_profiles: List[Dict],
     world_state: Optional[Dict],
+    user_feedback: str = "",
 ) -> str:
-    """根据评审意见修改章节."""
+    """根据评审意见和用户反馈修改章节."""
     state_str = json.dumps(world_state, ensure_ascii=True) if world_state else "（无）"
     char_str = json.dumps(
         [{"name": c["name"], "personality": c.get("personality", ""),
           "contradiction": c.get("contradiction", "")} for c in character_profiles],
         ensure_ascii=False,
     )
+    feedback_section = ""
+    if user_feedback:
+        feedback_section = f"""
+
+[用户修改意见]
+{user_feedback}
+"""
 
     prompt = f"""[角色设定]
 {char_str}
@@ -369,8 +403,8 @@ def revise_chapter_text(
 
 [编辑意见]
 {json.dumps(review_result, ensure_ascii=True)}
-
-请修改本章，逐条回应意见。输出修改后的完整章节，在修改处标注 [修改说明]。"""
+{feedback_section}
+请修改本章，逐条回应意见和用户要求。输出修改后的完整章节，在修改处标注 [修改说明]。"""
 
     return chat(prompt, system=REVISE_SYSTEM_PROMPT, temperature=0.7, max_tokens=4096, timeout=300)
 
@@ -418,6 +452,7 @@ def auto_review_chapter_loop(
     prev_world_state: Optional[Dict] = None,
     max_iterations: int = 3,
     target_score: float = 8.0,
+    user_feedback: str = "",
 ) -> Tuple[str, Dict]:
     """完整评审循环：生成 → 评审 → 修改 → 再评审 → 直到达标.
 
@@ -428,10 +463,10 @@ def auto_review_chapter_loop(
 
     # 第一版：生成
     if chapter_num == 1 and not recent_chapters:
-        text = generate_chapter_text(novel, chapter_num, chapter_info, [], None)
+        text = generate_chapter_text(novel, chapter_num, chapter_info, [], None, user_feedback=user_feedback)
     else:
         text = generate_chapter_text(
-            novel, chapter_num, chapter_info, recent_chapters, prev_world_state
+            novel, chapter_num, chapter_info, recent_chapters, prev_world_state, user_feedback=user_feedback
         )
 
     for i in range(max_iterations):
@@ -452,13 +487,13 @@ def auto_review_chapter_loop(
             return text, review
 
         if verdict == "revise":
-            text = revise_chapter_text(text, review, character_profiles, prev_world_state)
+            text = revise_chapter_text(text, review, character_profiles, prev_world_state, user_feedback=user_feedback)
             continue
 
         # failed: 不再修改，返回当前版本
         if i == max_iterations - 1:
             return text, review
-        text = revise_chapter_text(text, review, character_profiles, prev_world_state)
+        text = revise_chapter_text(text, review, character_profiles, prev_world_state, user_feedback=user_feedback)
 
     return text, {"overall_score": 0, "verdict": "failed", "error": "Max iterations exceeded"}
 

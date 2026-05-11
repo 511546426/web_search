@@ -113,7 +113,13 @@ function loadCurrentTab() {
   if (currentTab === 'scripts') loadScripts();
   else if (currentTab === 'videos') loadVideos();
   else if (currentTab === 'novels') loadNovels();
-  else if (currentTab === 'product') { /* nothing auto-load */ }
+  else if (currentTab === 'product') {
+    if (_inProductStepFlow) {
+      showProductStepFlow();
+    } else {
+      showProductListView();
+    }
+  }
   else if (currentTab === 'publish') loadPublishLogs();
 }
 
@@ -334,8 +340,9 @@ async function loadNovels() {
         <div class="card-actions" style="flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="viewNovel(${n.id})">查看</button>
           ${n.done_chapters > 0 ? `<button class="btn btn-outline btn-sm" onclick="downloadNovel(${n.id})">下载</button>` : ''}
-          ${!n.has_world ? `<button class="btn btn-primary btn-sm" onclick="generateWorld(${n.id})">世界观</button>` : ''}
+          ${!n.has_world ? `<button class="btn btn-primary btn-sm" onclick="generateWorld(${n.id})">世界观</button>` : `<button class="btn btn-outline btn-sm" onclick="showNovelFeedback('world', ${n.id})">重设世界观</button>`}
           ${n.has_world && !n.has_outline ? `<button class="btn btn-primary btn-sm" onclick="generateOutline(${n.id})">大纲</button>` : ''}
+	          ${n.has_world && n.has_outline ? `<button class="btn btn-outline btn-sm" onclick="showNovelFeedback('outline', ${n.id})">重设大纲</button>` : ''}
           ${n.has_outline && n.done_chapters < n.total_chapters ? `<button class="btn btn-success btn-sm" onclick="generateAllChapters(${n.id})">生成全部</button>` : ''}
           <button class="btn btn-ghost-danger btn-sm" onclick="deleteNovel(${n.id})" title="删除">✕</button>
         </div>
@@ -363,11 +370,11 @@ async function viewNovel(id) {
     if (novel.world_setting) {
       const ws = novel.world_setting;
       const world = ws.world || {};
-      worldHtml = '<h3>世界观</h3><div class="novel-section"><p><strong>' + escHtml(world.name || '') + '</strong></p><p>' + escHtml(world.background || '') + '</p>' + (world.power_system ? '<p><strong>力量体系:</strong> ' + escHtml(world.power_system.name || '') + '</p>' : '') + '</div>';
+      worldHtml = '<div style="display:flex;align-items:center;gap:8px;"><h3>世界观</h3><button class="btn btn-outline btn-sm" onclick="showNovelFeedback(\'world\', ' + id + ')">重新生成</button></div><div class="novel-section"><p><strong>' + escHtml(world.name || '') + '</strong></p><p>' + escHtml(world.background || '') + '</p>' + (world.power_system ? '<p><strong>力量体系:</strong> ' + escHtml(world.power_system.name || '') + '</p>' : '') + '</div>';
     }
     let charHtml = '';
     if (novel.character_profiles && novel.character_profiles.length) {
-      charHtml = '<h3>角色设定</h3><div class="novel-section">' + novel.character_profiles.map(c => '<div class="char-card"><strong>' + escHtml(c.name) + '</strong><span class="tag">' + escHtml(c.role || '') + '</span><p>' + escHtml(c.personality || '') + '</p></div>').join('') + '</div>';
+      charHtml = '<div style="display:flex;align-items:center;gap:8px;margin-top:12px;"><h3 style="margin:0;">角色设定</h3><button class="btn btn-outline btn-sm" onclick="showNovelFeedback(\'world\', ' + id + ')">重新生成</button></div><div class="novel-section">' + novel.character_profiles.map(c => '<div class="char-card"><strong>' + escHtml(c.name) + '</strong><span class="tag">' + escHtml(c.role || '') + '</span><p>' + escHtml(c.personality || '') + '</p></div>').join('') + '</div>';
     }
     let genBtn = '';
     if (novel.has_outline && chapters.length < novel.total_chapters) {
@@ -403,9 +410,10 @@ async function viewChapter(novelId, chapterNum) {
     $('#novelModalBody').innerHTML = `
       <div style="margin-bottom:16px;color:var(--text-tertiary);font-size:0.82rem;">${ch.word_count > 0 ? Math.round(ch.word_count / 100) / 10 + '千字' : ''}${ch.review_score ? ' | 评分: ' + ch.review_score + '/10' : ''}</div>
       <div class="chapter-content">${escHtml(ch.content).replace(/\n/g, '<br>')}</div>
-      <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;">
+      <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
         ${chapterNum > 1 ? '<button class="btn btn-outline btn-sm" onclick="viewChapter(' + novelId + ', ' + (chapterNum - 1) + ')">← 上一章</button>' : ''}
         <button class="btn btn-outline btn-sm" onclick="viewNovel(' + novelId + ')">返回目录</button>
+        <button class="btn btn-outline btn-sm" onclick="showNovelFeedback('chapter', ' + novelId + ', ' + chapterNum + ')">重新生成</button>
         <button class="btn btn-outline btn-sm" onclick="viewChapter(' + novelId + ', ' + (chapterNum + 1) + ')">下一章 →</button>
       </div>`;
   } catch (e) { showToast('加载失败: ' + e.message, 'error'); }
@@ -433,9 +441,188 @@ async function generateSingleChapter(novelId, chapterNum) {
   try { const res = await api(API + '/novels/' + novelId + '/generate-chapter/' + chapterNum, { method: 'POST' }); showToast('第' + chapterNum + '章生成完成，评分: ' + (res.review_score || 'N/A') + '/10', 'success'); viewNovel(novelId); } catch (e) { showToast('生成失败: ' + e.message, 'error'); }
 }
 
+// ---- 小说反馈重试 ----
+let _feedbackState = { type: '', id: 0, chapterNum: null };
+
+function showNovelFeedback(type, id, chapterNum) {
+  _feedbackState = { type, id, chapterNum: chapterNum || null };
+  const labels = { world: '世界观', outline: '大纲', chapter: '章节' };
+  $('#novelFeedbackTitle').textContent = '重新生成' + (labels[type] || '');
+  $('#novelFeedbackInput').value = '';
+  $('#novelFeedbackModal').classList.add('active');
+}
+
+function closeNovelFeedback() {
+  $('#novelFeedbackModal').classList.remove('active');
+  $('#novelFeedbackInput').value = '';
+}
+
+$('#doNovelFeedbackBtn').addEventListener('click', async () => {
+  const { type, id, chapterNum } = _feedbackState;
+  const feedback = $('#novelFeedbackInput').value.trim();
+  if (!feedback) { showToast('请填写修改意见', 'warning'); return; }
+  closeNovelFeedback();
+
+  const btn = $('#doNovelFeedbackBtn');
+  btn.disabled = true; btn.textContent = '生成中...';
+
+  try {
+    let endpoint, method = 'POST';
+    if (type === 'world') {
+      endpoint = API + '/novels/' + id + '/retry-world';
+    } else if (type === 'outline') {
+      endpoint = API + '/novels/' + id + '/retry-outline';
+    } else if (type === 'chapter') {
+      endpoint = API + '/novels/' + id + '/retry-chapter/' + chapterNum;
+    } else {
+      showToast('未知操作类型', 'error'); return;
+    }
+    const res = await api(endpoint, { method, body: JSON.stringify({ feedback }) });
+    showToast(res.message || '重新生成成功', 'success');
+    if (type === 'chapter') {
+      viewChapter(id, chapterNum);
+    } else {
+      viewNovel(id);
+      loadNovels();
+    }
+  } catch (e) {
+    showToast('重新生成失败: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '重新生成';
+  }
+});
+
 // =========================================================
 // 商品带货步骤流程
 // =========================================================
+
+// ---- 商品带货列表 ----
+let _inProductStepFlow = false;
+
+function showProductListView() {
+  _inProductStepFlow = false;
+  $('#productListView').style.display = 'block';
+  $('#productStepFlow').style.display = 'none';
+  loadProductAds();
+  // 重置步骤状态
+  currentStep = 1;
+  currentAdId = null;
+  uploadedPhotoIds = [];
+  updateStepUI(1);
+  $('#photoPreview').innerHTML = '';
+  $('#photoCount').textContent = '未选择';
+  $('#videoName').textContent = '未选择视频';
+  $('#productPhotoInput').value = '';
+  $('#productVideoInput').value = '';
+  $('#createDraftBtn').disabled = true;
+}
+
+function showProductStepFlow() {
+  _inProductStepFlow = true;
+  $('#productListView').style.display = 'none';
+  $('#productStepFlow').style.display = 'block';
+}
+
+async function loadProductAds() {
+  try {
+    const list = await api(API + '/product-ad/list?limit=50');
+    const el = $('#productAdList');
+    if (!list.length) {
+      el.innerHTML = '<div class="empty-state"><p>暂无带货剧本</p><p class="sub">点击「新建带货」创建</p></div>';
+      return;
+    }
+    el.innerHTML = list.map(ad => `
+      <div class="card">
+        <div class="card-status ${ad.status === 'video_done' ? 'completed' : ad.status === 'video_failed' ? 'failed' : 'draft'}"></div>
+        <div class="card-body">
+          <div class="card-title">${escHtml(ad.title)}</div>
+          <div class="card-meta">
+            <span>${statusLabel(ad.status)}</span>
+            ${ad.genre ? '<span class="tag">' + escHtml(ad.genre) + '</span>' : ''}
+            ${ad.review_score !== null && ad.review_score !== undefined ? '<span class="tag review-score">评分: ' + ad.review_score + '/10</span>' : ''}
+            <span>${fmtDate(ad.created_at)}</span>
+          </div>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-outline btn-sm" onclick="continueProductAd(${ad.id})">继续制作</button>
+          ${ad.video_path ? '<button class="btn btn-secondary btn-sm" onclick="previewVideo(\'' + escHtml(ad.video_path) + '\')">预览视频</button>' : ''}
+          <button class="btn btn-ghost-danger btn-sm" onclick="deleteProductAd(${ad.id})" title="删除">✕</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) { $('#productAdList').innerHTML = '<div class="empty-state"><p>加载失败</p><p class="sub">' + escHtml(e.message) + '</p></div>'; }
+}
+
+async function continueProductAd(id) {
+  try {
+    const ad = await api(API + '/product-ad/' + id);
+    currentAdId = id;
+    uploadedPhotoIds = JSON.parse(ad.photo_ids || '[]');
+    // 填充表单
+    if (ad.product_info) {
+      const info = typeof ad.product_info === 'string' ? JSON.parse(ad.product_info) : ad.product_info;
+      $('#prodName').value = info.name || '';
+      $('#prodCategory').value = info.category || '';
+      $('#prodDesc').value = info.description || '';
+      $('#prodSellingPoints').value = info.selling_points || '';
+      $('#prodAudience').value = info.target_audience || '';
+      if (info.visual_style) $('#prodVisualStyle').value = info.visual_style;
+      if (info.showcase_style) $('#prodShowcaseStyle').value = info.showcase_style;
+    }
+    showProductStepFlow();
+    // 根据状态跳转到对应步骤
+    if (ad.composite_confirmed && ad.script_confirmed && (ad.status === 'video_done' || ad.status === 'video_failed')) {
+      goToStep(STEPS.VIDEO);
+      if (ad.video_path) {
+        $('#videoGenResult').style.display = 'block';
+        $('#videoGenPlaceholder').style.display = 'none';
+        $('#videoGenLoading').style.display = 'none';
+        const src = window.location.origin + '/' + ad.video_path.replace(/^.*\/backend\//, '');
+        $('#generatedVideoSrc').src = src;
+        $('#generatedVideo').load();
+      }
+      $('#generateVideoBtn').disabled = false;
+    } else if (ad.composite_confirmed && ad.script_confirmed) {
+      goToStep(STEPS.VIDEO);
+      $('#generateVideoBtn').disabled = false;
+    } else if (ad.composite_confirmed) {
+      goToStep(STEPS.SCRIPT);
+      runScriptGeneration();
+    } else if (ad.status !== 'draft' || ad.composite_retry_count > 0) {
+      goToStep(STEPS.COMPOSITE);
+      runCompositePreview();
+    } else {
+      goToStep(STEPS.UPLOAD);
+    }
+    showToast('已加载: ' + ad.title, 'info');
+  } catch (e) { showToast('加载失败: ' + e.message, 'error'); }
+}
+
+async function deleteProductAd(id) {
+  if (!confirm('确定删除带货剧本 #' + id + '？')) return;
+  try {
+    await api(API + '/product-ad/' + id, { method: 'DELETE' });
+    showToast('已删除', 'success');
+    loadProductAds();
+  } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+}
+
+$('#refreshProductBtn').addEventListener('click', loadProductAds);
+$('#newProductBtn').addEventListener('click', () => {
+  // 重置表单
+  $('#prodName').value = '';
+  $('#prodCategory').value = '';
+  $('#prodDesc').value = '';
+  $('#prodSellingPoints').value = '';
+  $('#prodAudience').value = '';
+  $('#prodVisualStyle').value = 'realistic';
+  $('#prodShowcaseStyle').value = 'story';
+  currentAdId = null;
+  uploadedPhotoIds = [];
+  goToStep(STEPS.UPLOAD);
+  showProductStepFlow();
+});
+$('#backToProductListBtn').addEventListener('click', showProductListView);
 
 // ---- Step 1: 上传素材 ----
 $('#selectPhotosBtn').addEventListener('click', () => $('#productPhotoInput').click());
