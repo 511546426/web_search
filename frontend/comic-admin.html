@@ -4,12 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>漫剧管理面板</title>
-<link rel="stylesheet" href="/css/comic-admin.css?v=20260511-2">
+<link rel="stylesheet" href="/css/comic-admin.css?v=20260511-3">
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>漫剧视频管理面板</h1>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <h1 style="margin:0;">漫剧管理面板</h1>
+      <button id="refreshBtn" class="btn btn-outline btn-sm" style="flex-shrink:0;">⟳ 刷新</button>
+    </div>
     <div class="stats-bar" id="statsBar">加载中...</div>
   </header>
 
@@ -20,28 +23,6 @@
     <button class="tab" data-tab="product">商品带货</button>
     <button class="tab" data-tab="publish">发布管理</button>
   </nav>
-
-  <!-- 操作区 -->
-  <section class="actions">
-    <div class="action-group">
-      <input type="text" id="topicInput" placeholder="输入主题（留空则自动抓取热点）">
-      <button id="triggerBtn" class="btn btn-primary">手动触发生成</button>
-      <button id="triggerBatchBtn" class="btn btn-secondary">批量生成 (3个)</button>
-    </div>
-    <div class="action-group">
-      <textarea id="scriptTextInput" placeholder="粘贴你的剧本文字，系统自动解析为结构化剧本..."></textarea>
-      <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0">
-        <select id="visualStyleSelect">
-          <option value="anime">动漫风格</option>
-          <option value="realistic">真人风格</option>
-        </select>
-        <button id="fromTextBtn" class="btn btn-primary">生成剧本</button>
-      </div>
-    </div>
-    <div class="action-group">
-      <button id="refreshBtn" class="btn btn-outline">刷新</button>
-    </div>
-  </section>
 
   <!-- 剧本列表 -->
   <section class="panel active" id="scriptsPanel">
@@ -292,6 +273,6 @@
   </div>
 </div>
 
-<script src="/js/comic-admin.js?v=20260511-2"></script>
+<script src="/js/comic-admin.js?v=20260511-3"></script>
 </body>
 </html>

@@ -17,9 +17,7 @@ from app.schemas import (
     CreateScriptRequest,
     PublishLogResponse,
     ScriptFromTextRequest,
-    TriggerRequest,
     PublishRequest,
-    TriggerBatchRequest,
 )
 from fastapi import Depends
 
@@ -150,24 +148,6 @@ def create_script_from_text(body: ScriptFromTextRequest, db: Session = Depends(g
     }
 
 
-@router.post("/scripts/{script_id}/regenerate-video")
-def regenerate_video(script_id: int, db: Session = Depends(get_db)):
-    """旧版：直接生成视频（无评审）。"""
-    script = db.query(ComicScript).filter(ComicScript.id == script_id).first()
-    if not script:
-        raise HTTPException(status_code=404, detail="剧本不存在")
-
-    from app.services.video_pipeline import run_pipeline
-
-    topic = script.source_topic or script.title
-
-    def _run():
-        run_pipeline(topic, auto_generate_video=True)
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"message": "视频重新生成已触发", "script_id": script_id}
-
-
 @router.post("/scripts/{script_id}/generate-video")
 def generate_video_with_review(script_id: int, db: Session = Depends(get_db)):
     """评审 → 自动修改达标 → 生成视频（一次完成）。"""
@@ -202,34 +182,6 @@ def generate_video_with_review(script_id: int, db: Session = Depends(get_db)):
         "message": "自动评审+生成视频已触发，完成后将通知",
         "script_id": script_id,
     }
-
-
-# ---- 触发生成 ----
-
-@router.post("/trigger")
-def trigger_pipeline(body: TriggerRequest):
-    from app.services.video_pipeline import run_pipeline
-
-    topic = body.topic or "最新热门话题"
-    if body.topic:
-        topic = {"title": body.topic, "platform": "manual"}
-
-    def _run():
-        run_pipeline(topic, auto_generate_video=body.auto_generate_video, resolution=body.resolution)
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"message": "视频生成流水线已触发", "topic": str(topic)}
-
-
-@router.post("/trigger-batch")
-def trigger_batch(body: TriggerBatchRequest):
-    from app.services.video_pipeline import run_batch_pipeline
-
-    def _run():
-        run_batch_pipeline(limit=body.limit)
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"message": f"批量生成已触发，处理 {body.limit} 个热点"}
 
 
 # ---- 视频 ----
@@ -402,15 +354,6 @@ def list_publish_logs(video_id: Optional[int] = Query(None), db: Session = Depen
     return q.limit(50).all()
 
 
-# ---- 热点查看 ----
-
-@router.get("/trending")
-def get_trending(limit: int = Query(15)):
-    from app.services.scraper import get_trending_topics
-
-    return get_trending_topics(limit=limit)
-
-
 # ---- 统计 ----
 
 @router.get("/stats")
@@ -428,28 +371,3 @@ def comic_stats(db: Session = Depends(get_db)):
     }
 
 
-# ---- 定时任务开关 ----
-
-@router.get("/scheduler/status")
-def scheduler_status():
-    """查看定时自动生成是否开启."""
-    from app.tasks.scheduler import is_auto_generate_enabled
-    return {"enabled": is_auto_generate_enabled()}
-
-
-@router.post("/scheduler/enable")
-def scheduler_enable():
-    """开启定时自动生成（每天 8:07, 12:07, 18:07 抓取热点 + 生成剧本）. """
-    from app.tasks.scheduler import enable_auto_generate
-    enable_auto_generate()
-    logger.info("Auto generate enabled by user")
-    return {"message": "定时自动生成已开启", "enabled": True}
-
-
-@router.post("/scheduler/disable")
-def scheduler_disable():
-    """关闭定时自动生成."""
-    from app.tasks.scheduler import disable_auto_generate
-    disable_auto_generate()
-    logger.info("Auto generate disabled by user")
-    return {"message": "定时自动生成已关闭", "enabled": False}

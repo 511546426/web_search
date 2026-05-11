@@ -144,34 +144,6 @@ header h1 {
   font-weight: 600;
 }
 
-.scheduler-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 12px;
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-}
-
-.scheduler-badge {
-  padding: 3px 14px;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
-}
-
-.scheduler-badge.enabled {
-  background: var(--green-bg);
-  color: var(--green);
-}
-
-.scheduler-badge.disabled {
-  background: var(--red-bg);
-  color: var(--red);
-}
-
 /* ── Tabs ── */
 .tabs {
   display: flex;
@@ -209,57 +181,6 @@ header h1 {
   color: var(--text-on-gold);
   font-weight: 600;
   box-shadow: var(--shadow-glow-gold);
-}
-
-/* ── Actions Panel ── */
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 24px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 16px 20px;
-  backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-card);
-}
-
-.action-group {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.action-group input,
-.action-group select,
-.action-group textarea {
-  padding: 9px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-default);
-  background: rgba(0, 0, 0, 0.3);
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  font-family: inherit;
-  transition: border-color 0.25s, box-shadow 0.25s;
-  outline: none;
-}
-
-.action-group input:focus,
-.action-group select:focus,
-.action-group textarea:focus {
-  border-color: rgba(245, 158, 11, 0.4);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.08);
-}
-
-.action-group input::placeholder,
-.action-group textarea::placeholder {
-  color: var(--text-tertiary);
-}
-
-.action-group textarea {
-  min-height: 60px;
-  resize: vertical;
 }
 
 /* ── Buttons ── */
@@ -1267,11 +1188,6 @@ header h1 {
 
   .tabs { gap: 2px; padding: 3px; }
   .tab { font-size: 0.78rem; padding: 8px 6px; }
-
-  .actions { padding: 14px; }
-  .action-group { flex-wrap: wrap; }
-  .action-group input,
-  .action-group select { flex: 1; min-width: 100px; }
 
   .card { flex-direction: column; align-items: flex-start; gap: 10px; }
   .card-actions { width: 100%; justify-content: flex-end; }

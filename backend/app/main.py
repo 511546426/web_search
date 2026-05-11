@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routers import auth, comic_videos, coze_api, novels, product_ad
+from app.routers import auth, comic_videos, novels, product_ad
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_DIR = os.path.join(BACKEND_DIR, "uploads")
@@ -38,7 +38,6 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(comic_videos.router)
-app.include_router(coze_api.router)
 app.include_router(product_ad.router)
 app.include_router(novels.router)
 

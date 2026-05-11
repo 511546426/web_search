@@ -63,26 +63,6 @@ SCRIPT_SYSTEM = """你是一名从业 12 年的漫剧导演兼编剧，擅长将
 }"""
 
 
-def generate_script(topic: Union[Dict, str], style: str = "dramatic") -> Dict:
-    """根据热点话题生成漫剧剧本."""
-    if isinstance(topic, dict):
-        title = topic.get("title", topic.get("name", ""))
-        platform = topic.get("platform", "trending")
-        topic_text = f"热点标题: {title}\n来源平台: {platform}\n热度: {topic.get('hot_score', 'N/A')}"
-    else:
-        topic_text = str(topic)
-
-    prompt = f"""Create a comic drama script based on this trending topic:
-
-{topic_text}
-
-Style preference: {style}
-
-Return ONLY the JSON, no markdown fences, no extra text."""
-
-    return chat_json(prompt, system=SCRIPT_SYSTEM, temperature=0.85, max_tokens=4096)
-
-
 def generate_storyboard(script: Dict) -> List[Dict]:
     """根据剧本生成分镜描述，用于 Seedance 视频生成."""
     scenes = script.get("script", [])
@@ -293,22 +273,3 @@ def auto_review_loop(script_data: Dict, max_iterations: int = 5, target_score: f
         "achieved_target": False,
     }
 
-
-def extract_title_suggestions(trending_topics: List[Dict], count: int = 5) -> List[str]:
-    """从热点列表中提取适合做漫剧的题材建议."""
-    prompt = f"""Given these trending topics, pick the {count} best ones that could become great short comic drama videos.
-Consider: emotional impact, visual potential, dramatic tension.
-
-Topics:
-{json.dumps(trending_topics, ensure_ascii=False, indent=2)}
-
-Return ONLY a JSON array of strings, each being the selected topic title."""
-
-    result = chat_json(
-        prompt,
-        system="You are a content curator for short drama videos. Always output JSON arrays.",
-        temperature=0.6,
-    )
-    if isinstance(result, list):
-        return result[:count]
-    return []

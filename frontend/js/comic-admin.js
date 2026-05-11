@@ -60,54 +60,7 @@ $$('.tab').forEach(t => {
   });
 });
 
-// ---- 操作按钮 ----
-$('#triggerBtn').addEventListener('click', async () => {
-  const topic = $('#topicInput').value.trim();
-  const btn = $('#triggerBtn');
-  btn.disabled = true; btn.textContent = '触发中...';
-  try {
-    const res = await api(API + '/trigger', { method: 'POST', body: JSON.stringify({ topic: topic || null, auto_generate_video: true }) });
-    showToast(res.message, 'success');
-    loadStats();
-  } catch (e) { showToast('触发生成失败: ' + e.message, 'error'); }
-  btn.disabled = false; btn.textContent = '手动触发生成';
-});
-
-$('#triggerBatchBtn').addEventListener('click', async () => {
-  if (!confirm('确定批量生成 3 个视频？每次约消耗 45 元。')) return;
-  const btn = $('#triggerBatchBtn');
-  btn.disabled = true; btn.textContent = '生成中...';
-  try {
-    const res = await api(API + '/trigger-batch', { method: 'POST', body: JSON.stringify({ limit: 3 }) });
-    showToast(res.message, 'success');
-    loadStats();
-  } catch (e) { showToast('批量生成失败: ' + e.message, 'error'); }
-  btn.disabled = false; btn.textContent = '批量生成 (3个)';
-});
-
-$('#fromTextBtn').addEventListener('click', async () => {
-  const text = $('#scriptTextInput').value.trim();
-  if (!text) { showToast('请先输入剧本文字', 'warning'); return; }
-  const visualStyle = $('#visualStyleSelect').value;
-  const btn = $('#fromTextBtn');
-  btn.disabled = true; btn.textContent = '解析中...';
-  try {
-    const res = await api(API + '/scripts/from-text', {
-      method: 'POST',
-      body: JSON.stringify({ text, visual_style: visualStyle })
-    });
-    let msg = `剧本「${res.title}」已生成 (ID: ${res.id})`;
-    if (res.review_score !== null && res.review_score !== undefined) {
-      msg += `\n综合评分: ${res.review_score}/10`;
-    }
-    showToast(msg, 'success', 5000);
-    $('#scriptTextInput').value = '';
-    loadScripts();
-    loadStats();
-  } catch (e) { showToast('解析失败: ' + e.message, 'error'); }
-  btn.disabled = false; btn.textContent = '生成剧本';
-});
-
+// ---- 刷新 ----
 $('#refreshBtn').addEventListener('click', loadCurrentTab);
 
 // ---- Modal ----

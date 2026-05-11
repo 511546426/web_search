@@ -1,16 +1,14 @@
-"""视频生成流水线编排 — 串联抓取→剧本→分镜→视频生成."""
+"""视频生成流水线编排 — 剧本→分镜→视频生成."""
 import os
 import json
 import logging
 from datetime import datetime
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from app.database import SessionLocal
 from app.models import ComicScript, ComicVideo
-from app.services.scraper import get_trending_topics
-from app.services.script_writer import generate_script, generate_storyboard
+from app.services.script_writer import generate_storyboard
 from app.services.seedance_client import seedance_client, SeedanceError
 
 logger = logging.getLogger("video_pipeline")
@@ -24,77 +22,6 @@ _DEFAULT_UPLOADS_DIR = os.path.join(
     "comic_videos",
 )
 UPLOADS_DIR = os.environ.get("VIDEO_OUTPUT_DIR", _DEFAULT_UPLOADS_DIR)
-
-
-@dataclass
-class PipelineResult:
-    success: bool
-    script_id: Optional[int] = None
-    video_id: Optional[int] = None
-    script: Optional[Dict] = None
-    error: str = ""
-    video_path: str = ""
-
-
-def run_pipeline(
-    topic: Union[Dict, str],
-    auto_generate_video: bool = True,
-    resolution: str = "720p",
-) -> PipelineResult:
-    """
-    执行完整流水线：
-    1. 生成剧本 (总是执行)
-    2. 生成分镜
-    3. 调用 Seedance 生成视频 (可选)
-    """
-    db = SessionLocal()
-    try:
-        if isinstance(topic, dict):
-            topic_title = topic.get("title", "Untitled")
-        else:
-            topic_title = str(topic)
-
-        logger.info(f"Generating script for: {topic_title}")
-        script_data = generate_script(topic)
-
-        storyboard = generate_storyboard(script_data)
-        script_data["storyboard"] = storyboard
-
-        db_script = ComicScript(
-            title=script_data.get("title", topic_title),
-            source_topic=json.dumps(topic, ensure_ascii=False) if isinstance(topic, dict) else topic_title,
-            script_content=json.dumps(script_data, ensure_ascii=False),
-            storyboard_json=json.dumps(storyboard, ensure_ascii=False),
-            genre=script_data.get("genre", ""),
-            status="draft",
-            tags=json.dumps(script_data.get("tags", []), ensure_ascii=False),
-        )
-        db.add(db_script)
-        db.commit()
-        db.refresh(db_script)
-        script_id = db_script.id
-        logger.info(f"Script saved: id={script_id}, title={db_script.title}")
-
-        result = PipelineResult(success=True, script_id=script_id, script=script_data)
-
-        if auto_generate_video:
-            try:
-                video_result = _do_generate_video(db, db_script, storyboard, resolution)
-                result.video_id = video_result.get("video_id")
-                result.video_path = video_result.get("video_path", "")
-            except SeedanceError as e:
-                logger.error(f"Seedance error: {e}")
-                db_script.status = "video_failed"
-                db.commit()
-                result.error = str(e)
-
-        return result
-
-    except Exception as e:
-        logger.exception(f"Pipeline failed: {e}")
-        return PipelineResult(success=False, error=str(e))
-    finally:
-        db.close()
 
 
 def _do_generate_video(db, db_script: ComicScript, storyboard: List[Dict], resolution: str = "720p") -> dict:
@@ -251,15 +178,3 @@ def generate_video_for_script_with_review(script_id: int, resolution: str = "720
         db.close()
 
 
-def run_batch_pipeline(limit: int = 3) -> List[PipelineResult]:
-    """批量处理：抓取热点 → 选题 → 逐个生成."""
-    topics = get_trending_topics(limit=20)
-    if not topics:
-        return [PipelineResult(success=False, error="No trending topics found")]
-
-    results = []
-    for i, topic in enumerate(topics[:limit]):
-        logger.info(f"Batch [{i+1}/{limit}]: {topic.get('title', 'N/A')}")
-        result = run_pipeline(topic, auto_generate_video=True)
-        results.append(result)
-    return results
