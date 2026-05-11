@@ -57,5 +57,12 @@ def _run_lightweight_migrations() -> None:
     _add_column_if_missing("product_ads", "review_score", "review_score FLOAT")
     _add_column_if_missing("product_ads", "error_message", "error_message TEXT")
 
+    # product_ads: 步骤确认字段
+    _add_column_if_missing("product_ads", "composite_confirmed", "composite_confirmed BOOLEAN DEFAULT 0")
+    _add_column_if_missing("product_ads", "composite_photo_ids", "composite_photo_ids TEXT")
+    _add_column_if_missing("product_ads", "composite_retry_count", "composite_retry_count INTEGER DEFAULT 0")
+    _add_column_if_missing("product_ads", "script_confirmed", "script_confirmed BOOLEAN DEFAULT 0")
+    _add_column_if_missing("product_ads", "script_user_feedback", "script_user_feedback TEXT")
+
     # novels: 兼容旧表
     _add_column_if_missing("novels", "error_message", "error_message TEXT")

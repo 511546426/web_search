@@ -4,18 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>漫剧管理面板</title>
-<link rel="stylesheet" href="/css/comic-admin.css?v=20260508-2">
+<link rel="stylesheet" href="/css/comic-admin.css?v=20260511-2">
 </head>
 <body>
 <div class="app">
   <header>
     <h1>漫剧视频管理面板</h1>
     <div class="stats-bar" id="statsBar">加载中...</div>
-    <div class="scheduler-bar">
-      <span>定时自动生成：</span>
-      <span id="schedulerStatus" class="scheduler-badge disabled">已关闭</span>
-      <button id="schedulerToggleBtn" class="btn btn-sm btn-outline">开启</button>
-    </div>
   </header>
 
   <nav class="tabs">
@@ -44,14 +39,7 @@
       </div>
     </div>
     <div class="action-group">
-      <select id="platformFilter">
-        <option value="">全部平台</option>
-        <option value="weibo">微博</option>
-        <option value="douyin">抖音</option>
-        <option value="bilibili">B站</option>
-      </select>
       <button id="refreshBtn" class="btn btn-outline">刷新</button>
-      <button id="scrapeTrendingBtn" class="btn btn-outline">查看当前热点</button>
     </div>
   </section>
 
@@ -82,49 +70,161 @@
 
   <!-- 商品带货 -->
   <section class="panel" id="productPanel">
-    <div class="product-upload-area" id="productUploadArea">
-      <div class="product-form-layout">
-        <div class="product-form-col">
-          <h3>① 上传商品素材</h3>
-          <input type="file" id="productPhotoInput" accept="image/*" multiple style="display:none">
-          <div class="product-form-row-inline">
-            <button id="selectPhotosBtn" class="btn btn-outline">选择照片</button>
-            <span id="photoCount" class="file-label">未选择</span>
-            <button id="uploadPhotosBtn" class="btn btn-primary" disabled>上传照片</button>
+    <!-- 步骤指示器 -->
+    <div class="step-indicator" id="stepIndicator">
+      <div class="step step-active" data-step="1">
+        <span class="step-circle">1</span>
+        <span class="step-label">上传素材</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" data-step="2">
+        <span class="step-circle">2</span>
+        <span class="step-label">合成预览</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" data-step="3">
+        <span class="step-circle">3</span>
+        <span class="step-label">剧本预览</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" data-step="4">
+        <span class="step-circle">4</span>
+        <span class="step-label">视频生成</span>
+      </div>
+    </div>
+
+    <!-- Step 1: 上传素材 + 填写信息 -->
+    <div class="step-content step-content-active" id="step1Content">
+      <div class="product-upload-area">
+        <div class="product-form-layout">
+          <div class="product-form-col">
+            <h3>① 上传商品素材</h3>
+            <input type="file" id="productPhotoInput" accept="image/*" multiple style="display:none">
+            <div class="product-form-row-inline">
+              <button id="selectPhotosBtn" class="btn btn-outline">选择照片</button>
+              <span id="photoCount" class="file-label">未选择</span>
+              <button id="uploadPhotosBtn" class="btn btn-primary" disabled>上传照片</button>
+            </div>
+            <input type="file" id="productVideoInput" accept="video/*" style="display:none">
+            <div class="product-form-row-inline">
+              <button id="selectVideoBtn" class="btn btn-outline">选择视频</button>
+              <span id="videoName" class="file-label">未选择视频</span>
+              <button id="uploadVideoBtn" class="btn btn-primary" disabled>上传并抽帧</button>
+            </div>
+            <div id="photoPreview" class="photo-preview-grid"></div>
+            <div class="form-tip">💡 上传服装照片时，如果照片名包含"logo"、"商标"、"标"等字样，系统会自动识别为商标参考图</div>
           </div>
-          <input type="file" id="productVideoInput" accept="video/*" style="display:none">
-          <div class="product-form-row-inline">
-            <button id="selectVideoBtn" class="btn btn-outline">选择视频</button>
-            <span id="videoName" class="file-label">未选择视频</span>
-            <button id="uploadVideoBtn" class="btn btn-primary" disabled>上传并抽帧</button>
+          <div class="product-form-col" style="flex:2;">
+            <h3>② 填写商品信息</h3>
+            <div class="product-form-grid">
+              <input id="prodName" placeholder="商品名称 *">
+              <input id="prodCategory" placeholder="品类（美妆/食品/数码）">
+              <textarea id="prodDesc" placeholder="商品描述" style="grid-column:1/-1;"></textarea>
+              <input id="prodSellingPoints" placeholder="卖点（逗号分隔）">
+              <input id="prodAudience" placeholder="目标人群">
+              <select id="prodVisualStyle">
+                <option value="realistic">真人实拍风格</option>
+                <option value="anime">动漫风格</option>
+              </select>
+              <select id="prodShowcaseStyle">
+                <option value="story">剧情带货（有对白）</option>
+                <option value="visual">视觉展示（无对白）</option>
+              </select>
+            </div>
           </div>
-          <div id="photoPreview" class="photo-preview-grid"></div>
         </div>
-        <div class="product-form-col" style="flex:2;">
-          <h3>② 填写商品信息</h3>
-          <div class="product-form-grid">
-            <input id="prodName" placeholder="商品名称">
-            <input id="prodCategory" placeholder="品类（如：美妆/食品/数码）">
-            <textarea id="prodDesc" placeholder="商品描述" style="grid-column:1/-1;"></textarea>
-            <input id="prodSellingPoints" placeholder="卖点（逗号分隔）">
-            <input id="prodAudience" placeholder="目标人群">
-            <select id="prodVisualStyle">
-              <option value="realistic">真人实拍风格</option>
-              <option value="anime">动漫风格</option>
-            </select>
-            <select id="prodShowcaseStyle">
-              <option value="story">剧情带货（有对白）</option>
-              <option value="visual">视觉展示（无对白·多角度）</option>
-            </select>
-            <button id="generateAdScriptBtn" class="btn btn-primary" disabled>③ 生成带货剧本</button>
-            <div class="form-hint">* 商品名称必填，其他信息可选，照片/视频选传</div>
-          </div>
+        <div class="step-actions-bar">
+          <button id="createDraftBtn" class="btn btn-primary" disabled>开始制作 →</button>
         </div>
       </div>
     </div>
-    <div id="productResult">
-      <h3>带货剧本列表</h3>
-      <div class="card-list" id="productAdList"></div>
+
+    <!-- Step 2: 合成预览 -->
+    <div class="step-content" id="step2Content">
+      <div class="preview-panel">
+        <div class="preview-header">
+          <h3>商标合成预览</h3>
+          <span class="badge badge-info" style="display:none;" id="noCompositeBadge">无需合成（服装已有商标）</span>
+        </div>
+        <div id="compositePreviewArea" class="composite-grid"></div>
+        <div id="noCompositeMsg" class="empty-state" style="display:none;">
+          <p>未检测到需要合成商标的服装</p>
+          <p class="sub">所有服装照片上似乎已有商标，无需合成</p>
+        </div>
+        <div class="step-actions-bar" id="compositeActions" style="display:none;">
+          <button id="retryCompositeBtn" class="btn btn-outline">重新合成</button>
+          <button id="confirmCompositeBtn" class="btn btn-primary">确认合成 ✓</button>
+        </div>
+        <div class="step-loading" id="compositeLoading" style="display:none;">
+          <div class="spinner"></div>
+          <p>正在分析图片并合成商标...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: 剧本预览 -->
+    <div class="step-content" id="step3Content">
+      <div class="preview-panel">
+        <div class="preview-header">
+          <h3>带货剧本预览</h3>
+          <span id="scriptStatusBadge" style="font-size:0.82rem;color:var(--text-tertiary);">待生成</span>
+        </div>
+        <!-- 剧本卡片（JSON 可视化） -->
+        <div class="script-preview-card" id="scriptPreviewArea" style="display:none;">
+          <div class="script-meta" id="scriptMeta"></div>
+          <div class="script-scenes" id="scriptScenesList"></div>
+          <div class="script-raw">
+            <div class="script-raw-header" onclick="toggleRawScript()">
+              <span>查看原始 JSON</span>
+              <span id="rawToggleIcon">▶</span>
+            </div>
+            <pre id="scriptRawContent" style="display:none;"></pre>
+          </div>
+        </div>
+        <div id="scriptLoading" class="step-loading" style="display:none;">
+          <div class="spinner"></div>
+          <p>AI 正在生成带货剧本...</p>
+        </div>
+        <div id="scriptPlaceholder" class="empty-state">
+          <p>剧本尚未生成</p>
+          <p class="sub">确认合成后即可生成带货剧本</p>
+        </div>
+        <div class="step-actions-bar" id="scriptActions" style="display:none;">
+          <button id="retryScriptBtn" class="btn btn-outline" onclick="showRetryScriptModal()">重新生成</button>
+          <button id="confirmScriptBtn" class="btn btn-primary">确认剧本 ✓</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: 视频生成 -->
+    <div class="step-content" id="step4Content">
+      <div class="preview-panel">
+        <div class="preview-header">
+          <h3>生成带货视频</h3>
+        </div>
+        <div id="videoGenArea">
+          <div class="empty-state" id="videoGenPlaceholder">
+            <p>确认剧本后即可生成视频</p>
+          </div>
+          <div class="step-loading" id="videoGenLoading" style="display:none;">
+            <div class="spinner"></div>
+            <p id="videoGenStatus">排队等待中...</p>
+          </div>
+          <div id="videoGenResult" style="display:none;">
+            <div class="video-player-wrapper">
+              <video id="generatedVideo" controls style="width:100%;border-radius:var(--radius-lg);max-height:500px;">
+                <source id="generatedVideoSrc" src="" type="video/mp4">
+              </video>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
+              <button id="regenerateVideoBtn" class="btn btn-outline" onclick="retryVideo()">重新生成</button>
+            </div>
+          </div>
+        </div>
+        <div class="step-actions-bar">
+          <button id="generateVideoBtn" class="btn btn-primary" disabled>开始生成视频</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -133,14 +233,41 @@
     <div class="card-list" id="publishList"></div>
   </section>
 
-  <!-- 热点展示 -->
-  <section class="panel" id="trendingPanel">
-    <h2>当前热点话题</h2>
-    <div class="card-list" id="trendingList"></div>
-  </section>
-
   <!-- Toast 通知容器 -->
   <div class="toast-container" id="toastContainer"></div>
+
+  <!-- 合成重试弹窗 -->
+  <div class="modal-overlay" id="retryCompositeModal">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-header">
+        <h2>调整落标位置</h2>
+        <button class="modal-close" onclick="$('#retryCompositeModal').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body" id="retryCompositeModalBody"></div>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="$('#retryCompositeModal').classList.remove('active')">取消</button>
+        <button class="btn btn-primary" id="doRetryCompositeBtn">开始合成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 剧本重试弹窗 -->
+  <div class="modal-overlay" id="retryScriptModal">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-header">
+        <h2>重新生成剧本</h2>
+        <button class="modal-close" onclick="$('#retryScriptModal').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:12px;">对当前剧本不满意？可以提补充要求，AI 会据此优化：</p>
+        <textarea id="scriptFeedbackInput" placeholder="例如：增加2个商标特写镜头、第一个场景放在户外街拍、强化产品功能展示..." style="width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:rgba(0,0,0,0.3);color:var(--text-primary);font-family:inherit;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="$('#retryScriptModal').classList.remove('active')">取消</button>
+        <button class="btn btn-primary" id="doRetryScriptBtn">重新生成</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 小说阅读 Modal -->
   <div class="modal-overlay" id="novelModal">
@@ -163,19 +290,8 @@
       <div class="modal-body" id="modalBody"></div>
     </div>
   </div>
-
-  <!-- 带货详情 Modal -->
-  <div class="modal-overlay" id="adDetailModal">
-    <div class="modal">
-      <div class="modal-header">
-        <h2 id="adModalTitle">带货剧本详情</h2>
-        <button class="modal-close" id="adModalClose">&times;</button>
-      </div>
-      <div class="modal-body" id="adModalBody"></div>
-    </div>
-  </div>
 </div>
 
-<script src="/js/comic-admin.js?v=20260508-2"></script>
+<script src="/js/comic-admin.js?v=20260511-2"></script>
 </body>
 </html>

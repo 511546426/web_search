@@ -8,7 +8,6 @@ from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
 from app.routers import auth, comic_videos, coze_api, novels, product_ad
-from app.tasks.scheduler import start_scheduler, stop_scheduler
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_DIR = os.path.join(BACKEND_DIR, "uploads")
@@ -19,9 +18,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    start_scheduler()
     yield
-    stop_scheduler()
 
 
 app = FastAPI(

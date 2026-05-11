@@ -69,6 +69,12 @@ class ProductAd(Base):
     video_path = Column(String(500), nullable=True)
     review_score = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
+    # 步骤确认状态
+    composite_confirmed = Column(Boolean, default=False)
+    composite_photo_ids = Column(Text, nullable=True)  # JSON: 合成后的图片文件名列表
+    composite_retry_count = Column(Integer, default=0)
+    script_confirmed = Column(Boolean, default=False)
+    script_user_feedback = Column(Text, nullable=True)  # 用户对剧本的补充要求
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

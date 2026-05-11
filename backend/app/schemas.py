@@ -115,6 +115,7 @@ class ProductInfoRequest(BaseModel):
     photo_ids: List[str] = Field(default_factory=list)  # 上传的图片文件名列表
     visual_style: str = "realistic"  # 动漫/真人
     showcase_style: str = "story"  # story（剧情带货）/ visual（视觉展示）
+    ad_id: Optional[int] = Field(default=None, description="复用已有草稿 ID，传此值则更新已有记录而非新建")
 
 class ProductAdScriptResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -127,5 +128,44 @@ class ProductAdScriptResponse(BaseModel):
     product_info: str
     photo_ids: str
     review_score: Optional[float] = None
+    composite_confirmed: bool = False
+    composite_photo_ids: Optional[str] = None
+    composite_retry_count: int = 0
+    script_confirmed: bool = False
+    script_user_feedback: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+# ---- 步骤化带货流程 ----
+
+class CompositePreviewRequest(BaseModel):
+    """商标合成预览请求."""
+    ad_id: int
+    logo_photo_id: str  # 商标照片 ID（单独上传的商标图）
+    garment_photo_ids: List[str] = Field(default_factory=list)  # 需要合成商标的服装照片，为空则检测所有无标照片
+    positions: dict = Field(default_factory=dict)  # 可选：{"photo_id": "左胸前"}，不传则 AI 推断
+
+
+class CompositePreviewItem(BaseModel):
+    photo_id: str
+    photo_url: str
+    garment_type: str = ""
+    position: Optional[str] = None
+    logo_visible: bool = False
+    confirmed: bool = False
+
+
+class CompositePreviewResponse(BaseModel):
+    ad_id: int
+    items: List[CompositePreviewItem]
+
+
+class CompositeConfirmRequest(BaseModel):
+    ad_id: int
+    photo_ids: List[str]  # 确认的合成照片 ID 列表
+
+
+class ScriptRetryRequest(BaseModel):
+    ad_id: int
+    feedback: str = ""  # 用户补充要求
