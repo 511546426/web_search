@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>漫剧管理面板</title>
-<link rel="stylesheet" href="/css/comic-admin.css?v=20260508-1">
+<link rel="stylesheet" href="/css/comic-admin.css?v=20260508-2">
 </head>
 <body>
 <div class="app">
@@ -29,18 +29,18 @@
   <!-- 操作区 -->
   <section class="actions">
     <div class="action-group">
-      <input type="text" id="topicInput" placeholder="输入主题（留空则自动抓取热点）" style="flex:1">
+      <input type="text" id="topicInput" placeholder="输入主题（留空则自动抓取热点）">
       <button id="triggerBtn" class="btn btn-primary">手动触发生成</button>
       <button id="triggerBatchBtn" class="btn btn-secondary">批量生成 (3个)</button>
     </div>
     <div class="action-group">
-      <textarea id="scriptTextInput" placeholder="粘贴你的剧本文字，系统自动解析为结构化剧本..." style="flex:1; min-height:60px; resize:vertical; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:inherit"></textarea>
+      <textarea id="scriptTextInput" placeholder="粘贴你的剧本文字，系统自动解析为结构化剧本..."></textarea>
       <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0">
-        <select id="visualStyleSelect" style="padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:0.85rem">
+        <select id="visualStyleSelect">
           <option value="anime">动漫风格</option>
           <option value="realistic">真人风格</option>
         </select>
-        <button id="fromTextBtn" class="btn btn-primary" style="padding:8px 14px">生成剧本</button>
+        <button id="fromTextBtn" class="btn btn-primary">生成剧本</button>
       </div>
     </div>
     <div class="action-group">
@@ -63,11 +63,11 @@
   <!-- AI小说 -->
   <section class="panel" id="novelsPanel">
     <div class="novel-upload-area">
-      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
-        <input id="novelTitle" placeholder="小说标题（可选，不填自动生成）" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); flex:1;">
-        <input id="novelGenre" placeholder="类型（修仙/都市/科幻/悬疑）" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); width:160px;">
-        <input id="novelTheme" placeholder="一句话核心创意" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); width:240px;">
-        <input id="novelChapters" type="number" value="30" min="10" max="1000" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); width:80px;">
+      <div class="novel-form-row">
+        <input id="novelTitle" placeholder="小说标题（可选，不填自动生成）">
+        <input id="novelGenre" placeholder="类型（修仙/都市/科幻/悬疑）" style="width:150px;">
+        <input id="novelTheme" placeholder="一句话核心创意" style="width:220px;">
+        <input id="novelChapters" type="number" value="30" min="10" max="1000" style="width:70px;">
         <button id="createNovelBtn" class="btn btn-primary">创建小说</button>
       </div>
     </div>
@@ -83,41 +83,41 @@
   <!-- 商品带货 -->
   <section class="panel" id="productPanel">
     <div class="product-upload-area" id="productUploadArea">
-      <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
-        <div style="flex:1; min-width:280px;">
-          <h3 style="margin-bottom:8px;">① 上传商品素材</h3>
+      <div class="product-form-layout">
+        <div class="product-form-col">
+          <h3>① 上传商品素材</h3>
           <input type="file" id="productPhotoInput" accept="image/*" multiple style="display:none">
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+          <div class="product-form-row-inline">
             <button id="selectPhotosBtn" class="btn btn-outline">选择照片</button>
-            <span id="photoCount" style="color:var(--text-dim); font-size:0.85rem;">未选择</span>
+            <span id="photoCount" class="file-label">未选择</span>
             <button id="uploadPhotosBtn" class="btn btn-primary" disabled>上传照片</button>
           </div>
           <input type="file" id="productVideoInput" accept="video/*" style="display:none">
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+          <div class="product-form-row-inline">
             <button id="selectVideoBtn" class="btn btn-outline">选择视频</button>
-            <span id="videoName" style="color:var(--text-dim); font-size:0.85rem;">未选择视频</span>
+            <span id="videoName" class="file-label">未选择视频</span>
             <button id="uploadVideoBtn" class="btn btn-primary" disabled>上传并抽帧</button>
           </div>
-          <div id="photoPreview" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
+          <div id="photoPreview" class="photo-preview-grid"></div>
         </div>
-        <div style="flex:2; min-width:320px;">
-          <h3 style="margin-bottom:8px;">② 填写商品信息</h3>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <input id="prodName" placeholder="商品名称" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <input id="prodCategory" placeholder="品类（如：美妆/食品/数码）" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <textarea id="prodDesc" placeholder="商品描述" style="grid-column:1/-1; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); resize:vertical; min-height:50px;"></textarea>
-            <input id="prodSellingPoints" placeholder="卖点（逗号分隔）" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <input id="prodAudience" placeholder="目标人群" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-            <select id="prodVisualStyle" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+        <div class="product-form-col" style="flex:2;">
+          <h3>② 填写商品信息</h3>
+          <div class="product-form-grid">
+            <input id="prodName" placeholder="商品名称">
+            <input id="prodCategory" placeholder="品类（如：美妆/食品/数码）">
+            <textarea id="prodDesc" placeholder="商品描述" style="grid-column:1/-1;"></textarea>
+            <input id="prodSellingPoints" placeholder="卖点（逗号分隔）">
+            <input id="prodAudience" placeholder="目标人群">
+            <select id="prodVisualStyle">
               <option value="realistic">真人实拍风格</option>
               <option value="anime">动漫风格</option>
             </select>
-            <select id="prodShowcaseStyle" style="padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+            <select id="prodShowcaseStyle">
               <option value="story">剧情带货（有对白）</option>
               <option value="visual">视觉展示（无对白·多角度）</option>
             </select>
             <button id="generateAdScriptBtn" class="btn btn-primary" disabled>③ 生成带货剧本</button>
-            <div style="font-size:0.75rem;color:var(--text-dim);grid-column:1/-1;">* 商品名称必填，其他信息可选，照片/视频选传</div>
+            <div class="form-hint">* 商品名称必填，其他信息可选，照片/视频选传</div>
           </div>
         </div>
       </div>
@@ -138,6 +138,9 @@
     <h2>当前热点话题</h2>
     <div class="card-list" id="trendingList"></div>
   </section>
+
+  <!-- Toast 通知容器 -->
+  <div class="toast-container" id="toastContainer"></div>
 
   <!-- 小说阅读 Modal -->
   <div class="modal-overlay" id="novelModal">
@@ -173,6 +176,6 @@
   </div>
 </div>
 
-<script src="/js/comic-admin.js?v=20260508-1"></script>
+<script src="/js/comic-admin.js?v=20260508-2"></script>
 </body>
 </html>
