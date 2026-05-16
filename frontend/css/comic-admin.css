@@ -636,6 +636,29 @@ header h1 {
   border-color: var(--green);
 }
 
+/* ── Script Reference Photos ── */
+.script-ref-photos {
+  margin-bottom: 12px;
+}
+.ref-photos-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ref-photo-thumb {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid var(--border-subtle);
+  transition: transform 0.2s, border-color 0.2s;
+  cursor: pointer;
+}
+.ref-photo-thumb:hover {
+  transform: scale(1.08);
+  border-color: var(--gold);
+}
+
 /* ── Novel Reader ── */
 .novel-section {
   background: rgba(0, 0, 0, 0.25);

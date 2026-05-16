@@ -587,12 +587,22 @@ async function continueProductAd(id) {
       $('#generateVideoBtn').disabled = false;
     } else if (ad.composite_confirmed) {
       goToStep(STEPS.SCRIPT);
-      runScriptGeneration();
-    } else if (ad.status !== 'draft' || ad.composite_retry_count > 0) {
-      goToStep(STEPS.COMPOSITE);
-      runCompositePreview();
+      // 已有剧本内容则直接展示，否则触发生成
+      const hasScript = ad.script_content && ad.script_content !== '{}';
+      if (hasScript) {
+        renderScriptPreview(ad);
+      } else {
+        runScriptGeneration();
+      }
     } else {
-      goToStep(STEPS.UPLOAD);
+      // 已有照片的草稿 → 直接跳到合成预览
+      const hasPhotos = uploadedPhotoIds && uploadedPhotoIds.length > 0;
+      if (hasPhotos) {
+        goToStep(STEPS.COMPOSITE);
+        runCompositePreview();
+      } else {
+        goToStep(STEPS.UPLOAD);
+      }
     }
     showToast('已加载: ' + ad.title, 'info');
   } catch (e) { showToast('加载失败: ' + e.message, 'error'); }
@@ -717,6 +727,14 @@ $('#createDraftBtn').addEventListener('click', async () => {
   const btn = $('#createDraftBtn');
   btn.disabled = true; btn.textContent = '创建中...';
   try {
+    // 如果是继续已有草稿（currentAdId 已存在），直接跳到合成步骤
+    if (currentAdId) {
+      showToast('继续合成检测...', 'success');
+      goToStep(STEPS.COMPOSITE);
+      runCompositePreview();
+      btn.disabled = false; btn.textContent = '开始制作 →';
+      return;
+    }
     const res = await api(API + '/product-ad/create-draft', {
       method: 'POST',
       body: JSON.stringify({
@@ -769,11 +787,22 @@ function renderCompositePreview(data) {
   const area = $('#compositePreviewArea');
   const items = data.items || [];
 
+  const proceedToScript = async () => {
+    // 先确认合成（无需合成也要标记确认），再跳到剧本生成
+    try {
+      await api(API + '/product-ad/' + currentAdId + '/confirm-composite', {
+        method: 'POST',
+        body: JSON.stringify({ ad_id: currentAdId, photo_ids: uploadedPhotoIds })
+      });
+    } catch {}
+    goToStep(STEPS.SCRIPT);
+    runScriptGeneration();
+  };
+
   if (items.length === 0) {
     $('#noCompositeMsg').style.display = 'block';
     $('#compositeActions').style.display = 'none';
-    // 没有需要合成的，直接跳到剧本
-    setTimeout(() => goToStep(STEPS.SCRIPT), 1500);
+    setTimeout(proceedToScript, 1500);
     return;
   }
 
@@ -784,7 +813,7 @@ function renderCompositePreview(data) {
     $('#noCompositeMsg').style.display = 'block';
     $('#compositeActions').style.display = 'flex';
     $('#confirmCompositeBtn').textContent = '直接下一步 →';
-    $('#confirmCompositeBtn').onclick = () => goToStep(STEPS.SCRIPT);
+    $('#confirmCompositeBtn').onclick = proceedToScript;
     area.innerHTML = items.map(i => `
       <div class="composite-item">
         <img src="${i.photo_url}" class="composite-thumb" alt="${i.photo_id}">
@@ -948,6 +977,21 @@ function renderScriptPreview(data) {
     ${scriptData.setting ? '<div style="margin-top:8px;font-size:0.85rem;color:var(--text-secondary);"><strong>场景设定：</strong>' + escHtml(scriptData.setting) + '</div>' : ''}
     ${scriptData.cta ? '<div style="margin-top:4px;font-size:0.85rem;color:var(--gold-light);"><strong>CTA：</strong>' + escHtml(scriptData.cta) + '</div>' : ''}
   `;
+
+  // Reference photos
+  let photosForScript = uploadedPhotoIds && uploadedPhotoIds.length ? uploadedPhotoIds : [];
+  if (!photosForScript.length && data.photo_ids) {
+    try { photosForScript = typeof data.photo_ids === 'string' ? JSON.parse(data.photo_ids) : data.photo_ids; } catch {}
+  }
+  if (photosForScript.length) {
+    $('#scriptRefPhotos').innerHTML = '<h4 style="margin:16px 0 8px;font-size:0.9rem;">📷 参考商品照片</h4>' +
+      '<div class="ref-photos-grid">' +
+      photosForScript.map(pid => `<img src="/uploads/product_photos/${escHtml(pid)}" class="ref-photo-thumb" alt="${escHtml(pid)}" loading="lazy">`).join('') +
+      '</div>';
+    $('#scriptRefPhotos').style.display = 'block';
+  } else {
+    $('#scriptRefPhotos').style.display = 'none';
+  }
 
   // Scenes
   if (scenes.length) {

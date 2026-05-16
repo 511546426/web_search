@@ -115,6 +115,7 @@ def create_draft(body: ProductInfoRequest, db: Session = Depends(get_db)):
         product_info=json.dumps(body.model_dump(), ensure_ascii=False),
         photo_ids=json.dumps(body.photo_ids, ensure_ascii=False),
         script_content="{}",
+        genre="带货",
         status="draft",
         tags="带货",
     )
@@ -365,9 +366,10 @@ Product info:
 
 CRITICAL RULES:
 1. Product features (product_focus) must reference actual features from the visual analysis.
-2. ALL scenes in ONE unified real-world location. NEVER use plain/solid color backgrounds.
-3. **LOGO REQUIREMENT**: The product has a logo/brand mark on it (visible in reference photos). Every scene's camera angle must show the logo naturally. Include at least ONE dedicated close-up emphasizing the logo detail.
-4. Total video duration: ~15 seconds. Return ONLY the JSON."""
+2. ALL scenes in ONE unified real-world location with good natural/soft lighting (NOT harsh direct sunlight, NOT dim). Prefer indoor or semi-indoor settings with diffused light (e.g. boutique store, art gallery, sunroom, loft, shopping mall atrium, rooftop garden at golden hour, modern showroom, hotel lobby with floor-to-ceiling windows). NEVER use plain/solid color backgrounds.
+3. **LOGO**: The product has a brand logo/trademark on it. Use ONLY ONE brief close-up (≤1.5s) showing the logo clearly — placed in scene 4 or 5. Other scenes do NOT need to show the logo. The logo should appear naturally as part of the product, not as an obvious close-up of just the label.
+4. **SCENE COHERENCE**: Adjacent scenes must flow naturally — action/movement/pose continuity, consistent gaze direction, coherent camera movement direction. Shot sizes must progress logically (wide→mid→close→mid→wide), never jumping more than 2 levels between adjacent scenes.
+5. Total video duration: ~15 seconds. Return ONLY the JSON."""
     result = chat_json(prompt, system=system, temperature=0.7, max_tokens=4096)
     result["visual_style"] = product.visual_style
     result["showcase_style"] = product.showcase_style
@@ -379,6 +381,12 @@ def _build_visual_system_prompt(product, style_note):
     return f"""你是一名从业 15 年的时尚广告导演。你擅长用纯视觉语言讲述产品故事。
 ## 视觉叙事体系
 - Establishing → Detail → Motion → Lifestyle → Climax
+## 镜头连贯性（极其重要）
+- 相邻场景之间必须有视觉连贯性：动作延续、视线方向一致、运镜方向衔接
+- 每个场景的 action 必须承接上一个场景的结尾动作或姿态，形成流畅的长镜头感
+- 景别变化遵循递进逻辑，避免跳跃：远→中→近→特→中→远，相邻景别跨度不超过两级
+- 运镜方向在相邻场景间保持一致流向（如从左到右的环绕 → 下一镜继续从左到右的推近）
+- 模特/主体的姿态和视线在相邻场景间保持连贯，不突然改变方向
 ## 镜头语言
 景别：远景全身、中景半身、近景特写、大特写
 角度序列：正面 → 侧面 → 背面 → 3/4 → 动态 → 特写
@@ -386,11 +394,11 @@ def _build_visual_system_prompt(product, style_note):
 ## 场景背景设计
 - 禁止纯色背景/摄影棚/白墙
 - 所有场景在同一实景环境中（禁止咖啡馆/红砖墙/水泥墙）
-- 根据品类选择匹配场景（服装→街头/海滨/公园/画廊/天台等）
+- 优选室内或半室内柔光环境（精品买手店、艺术展厅、阳光房、loft公寓、商场中庭、酒店大堂落地窗旁、屋顶花园黄昏光），避免强烈直射阳光或昏暗环境
 - 同一环境内不同区域变化
 ## LOGO 要求
-- 商品上有品牌商标/图案，必须在每个场景中自然可见
-- 至少一个特写镜头聚焦商标细节
+- 商品上有品牌商标/图案，仅用1个短特写（≤1.5秒）在第4或第5个场景自然展示即可
+- 其余场景不需要刻意展示商标，让商标作为产品自然细节融入，而非显眼的标签大特写
 输出 JSON 结构：
 {{
   "title": "...", "product": "...", "genre": "带货/穿搭展示", "theme": "...",
@@ -403,6 +411,12 @@ def _build_visual_system_prompt(product, style_note):
 
 def _build_story_system_prompt(product, style_note):
     return f"""你是一名头部 MCN 创意总监，擅长制作"看了就想买"的电商短视频。
+## 镜头连贯性（极其重要）
+- 相邻场景之间必须有动作或视线连贯性，不能是割裂的独立镜头
+- 每个场景的 action/narration 必须自然承接上一个场景的结尾，形成流畅的视觉叙事流
+- 景别变化遵循递进逻辑：远→中→近→特→中→远，相邻景别跨度不超过两级
+- 运镜方向在相邻场景间保持一致流向
+- 模特/主体的姿态和视线在相邻场景间保持连贯
 ## 黄金开场
 痛点直击 / 结果展示 / 悬念提问 / 冲突引入
 ## 产品展示体系
@@ -410,10 +424,11 @@ def _build_story_system_prompt(product, style_note):
 ## 场景背景设计
 - 禁止纯色背景/摄影棚/白墙
 - 所有场景在同一实景环境中（禁止咖啡馆/红砖墙/水泥墙）
+- 优选室内或半室内柔光环境（精品买手店、艺术展厅、阳光房、loft公寓、商场中庭、酒店大堂落地窗旁、屋顶花园黄昏光），避免强烈直射阳光或昏暗环境
 - 同一环境内不同区域变化
 ## LOGO 要求
-- 商品上的品牌商标必须在每个场景中自然可见
-- 至少一个特写镜头聚焦商标
+- 商品上有品牌商标/图案，仅用1个短特写（≤1.5秒）在第4或第5个场景自然展示即可
+- 其余场景不需要刻意展示商标，让商标作为产品自然细节融入
 ## 对白
 自然口语化，像朋友推荐
 输出 JSON 结构：

@@ -122,7 +122,7 @@ class ProductAdScriptResponse(BaseModel):
     id: int
     title: str
     script_content: str
-    genre: str
+    genre: Optional[str] = None
     status: str
     tags: str
     product_info: str
