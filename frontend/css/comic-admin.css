@@ -953,7 +953,10 @@ header h1 {
   gap: 8px;
   opacity: 0.4;
   transition: all 0.3s;
-  cursor: default;
+  cursor: pointer;
+}
+.step:hover {
+  opacity: 0.7;
 }
 
 .step-active { opacity: 1; }

@@ -361,15 +361,19 @@ Product info:
 - Description: {product.description}
 - Selling points: {product.selling_points}
 - Target audience: {product.target_audience}
-- Style preference: {product.style_preference or 'Not specified'}
 - Showcase mode: {'Visual showcase (no dialogue)' if product.showcase_style == 'visual' else 'Story-driven drama'}
 
 CRITICAL RULES:
-1. Product features (product_focus) must reference actual features from the visual analysis.
-2. ALL scenes in ONE unified real-world location with good natural/soft lighting (NOT harsh direct sunlight, NOT dim). Prefer indoor or semi-indoor settings with diffused light (e.g. boutique store, art gallery, sunroom, loft, shopping mall atrium, rooftop garden at golden hour, modern showroom, hotel lobby with floor-to-ceiling windows). NEVER use plain/solid color backgrounds.
-3. **LOGO**: The product has a brand logo/trademark on it. Use ONLY ONE brief close-up (≤1.5s) showing the logo clearly — placed in scene 4 or 5. Other scenes do NOT need to show the logo. The logo should appear naturally as part of the product, not as an obvious close-up of just the label.
-4. **SCENE COHERENCE**: Adjacent scenes must flow naturally — action/movement/pose continuity, consistent gaze direction, coherent camera movement direction. Shot sizes must progress logically (wide→mid→close→mid→wide), never jumping more than 2 levels between adjacent scenes.
-5. Total video duration: ~15 seconds. Return ONLY the JSON."""
+1. **PRODUCT FIRST**: The product must be clearly visible in every scene. Lighting and setting must serve product clarity — the product's true colors, texture, and details must be accurately shown. Do NOT sacrifice visibility for atmosphere.
+2. Product features (product_focus) must reference actual features from the visual analysis.
+3. ALL scenes in ONE unified real-world location with good natural/soft lighting (NOT harsh direct sunlight, NOT dim). Prefer indoor or semi-indoor settings with diffused light (e.g. boutique store, art gallery, sunroom, loft, cafe, shopping mall atrium, rooftop garden at golden hour, modern showroom, hotel lobby with floor-to-ceiling windows). NEVER use plain/solid color backgrounds.
+4. **LOGO**: If the product has a visible brand logo/trademark, let it appear naturally on the product during regular shots. Do NOT dedicate a close-up just for the logo — avoid obvious label-pushing shots.
+5. **SCENE COHERENCE**: Adjacent scenes must flow naturally — action/movement/pose continuity, consistent gaze direction, coherent camera movement direction. Shot sizes must progress logically (wide→mid→close→mid→wide), never jumping more than 2 levels between adjacent scenes.
+6. Total video duration: ~15 seconds.
+
+Style hint (LOW PRIORITY — lightly influence the shoot atmosphere only; the product visual analysis above is the primary creative driver, the setting must serve the product, not the style): {product.style_preference or 'None'}
+
+Return ONLY the JSON."""
     result = chat_json(prompt, system=system, temperature=0.7, max_tokens=4096)
     result["visual_style"] = product.visual_style
     result["showcase_style"] = product.showcase_style
@@ -393,12 +397,11 @@ def _build_visual_system_prompt(product, style_note):
 运镜：固定、缓慢推近、环绕、跟随、升降
 ## 场景背景设计
 - 禁止纯色背景/摄影棚/白墙
-- 所有场景在同一实景环境中（禁止咖啡馆/红砖墙/水泥墙）
-- 优选室内或半室内柔光环境（精品买手店、艺术展厅、阳光房、loft公寓、商场中庭、酒店大堂落地窗旁、屋顶花园黄昏光），避免强烈直射阳光或昏暗环境
+- 所有场景在同一实景环境中（禁止红砖墙/水泥墙）
+- 优选室内或半室内柔光环境（精品买手店、艺术展厅、阳光房、loft公寓、咖啡馆、商场中庭、酒店大堂落地窗旁、屋顶花园黄昏光），避免强烈直射阳光或昏暗环境
 - 同一环境内不同区域变化
 ## LOGO 要求
-- 商品上有品牌商标/图案，仅用1个短特写（≤1.5秒）在第4或第5个场景自然展示即可
-- 其余场景不需要刻意展示商标，让商标作为产品自然细节融入，而非显眼的标签大特写
+- 商品上如有品牌商标/图案，在拍摄中自然出现即可，不需要专门给商标做大特写
 输出 JSON 结构：
 {{
   "title": "...", "product": "...", "genre": "带货/穿搭展示", "theme": "...",
@@ -423,8 +426,8 @@ def _build_story_system_prompt(product, style_note):
 场景 1-2：建立需求 → 场景 3-5：产品解决方案 → 场景 6-7：信任建立 → 场景 8：CTA
 ## 场景背景设计
 - 禁止纯色背景/摄影棚/白墙
-- 所有场景在同一实景环境中（禁止咖啡馆/红砖墙/水泥墙）
-- 优选室内或半室内柔光环境（精品买手店、艺术展厅、阳光房、loft公寓、商场中庭、酒店大堂落地窗旁、屋顶花园黄昏光），避免强烈直射阳光或昏暗环境
+- 所有场景在同一实景环境中（禁止红砖墙/水泥墙）
+- 优选室内或半室内柔光环境（精品买手店、艺术展厅、阳光房、loft公寓、咖啡馆、商场中庭、酒店大堂落地窗旁、屋顶花园黄昏光），避免强烈直射阳光或昏暗环境
 - 同一环境内不同区域变化
 ## LOGO 要求
 - 商品上有品牌商标/图案，仅用1个短特写（≤1.5秒）在第4或第5个场景自然展示即可

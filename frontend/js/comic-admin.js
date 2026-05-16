@@ -96,6 +96,61 @@ function goToStep(step) {
   window.scrollTo({ top: $('.step-indicator').offsetTop - 20, behavior: 'smooth' });
 }
 
+function goToStepInteractive(step) {
+  goToStep(step);
+  if (!_lastFetchedAd || !currentAdId) return;
+  const ad = _lastFetchedAd;
+
+  if (step === STEPS.SCRIPT) {
+    const hasScript = ad.script_content && ad.script_content !== '{}';
+    if (hasScript) {
+      $('#scriptPlaceholder').style.display = 'none';
+      $('#scriptLoading').style.display = 'none';
+      renderScriptPreview(ad);
+    } else {
+      $('#scriptPlaceholder').style.display = 'block';
+      $('#scriptLoading').style.display = 'none';
+      $('#scriptPreviewArea').style.display = 'none';
+      $('#scriptActions').style.display = 'none';
+    }
+  } else if (step === STEPS.VIDEO) {
+    if (ad.video_path) {
+      $('#videoGenResult').style.display = 'block';
+      $('#videoGenPlaceholder').style.display = 'none';
+      $('#videoGenLoading').style.display = 'none';
+      const src = window.location.origin + '/' + ad.video_path.replace(/^.*\/backend\//, '');
+      $('#generatedVideoSrc').src = src;
+      $('#generatedVideo').load();
+      $('#generateVideoBtn').disabled = false;
+    } else if (ad.script_confirmed) {
+      $('#videoGenPlaceholder').style.display = 'block';
+      $('#videoGenResult').style.display = 'none';
+      $('#videoGenLoading').style.display = 'none';
+      $('#generateVideoBtn').disabled = false;
+    } else {
+      $('#videoGenPlaceholder').style.display = 'block';
+      $('#videoGenResult').style.display = 'none';
+      $('#videoGenLoading').style.display = 'none';
+      $('#generateVideoBtn').disabled = true;
+    }
+  } else if (step === STEPS.COMPOSITE) {
+    runCompositePreview();
+  }
+}
+
+// 步骤指示器点击导航
+(function bindStepIndicator() {
+  const indicator = document.querySelector('#stepIndicator');
+  if (!indicator) return;
+  indicator.addEventListener('click', (e) => {
+    const stepEl = e.target.closest('.step');
+    if (!stepEl) return;
+    const targetStep = parseInt(stepEl.dataset.step);
+    if (!targetStep || targetStep === currentStep) return;
+    goToStepInteractive(targetStep);
+  });
+})();
+
 // ---- 数据加载 ----
 async function loadStats() {
   try {
@@ -498,6 +553,7 @@ $('#doNovelFeedbackBtn').addEventListener('click', async () => {
 
 // ---- 商品带货列表 ----
 let _inProductStepFlow = false;
+let _lastFetchedAd = null;
 
 function showProductListView() {
   _inProductStepFlow = false;
@@ -507,6 +563,7 @@ function showProductListView() {
   // 重置步骤状态
   currentStep = 1;
   currentAdId = null;
+  _lastFetchedAd = null;
   uploadedPhotoIds = [];
   updateStepUI(1);
   $('#photoPreview').innerHTML = '';
@@ -545,6 +602,7 @@ async function loadProductAds() {
         </div>
         <div class="card-actions">
           <button class="btn btn-outline btn-sm" onclick="continueProductAd(${ad.id})">继续制作</button>
+          <button class="btn btn-outline btn-sm" onclick="viewProductAdScript(${ad.id})">查看剧本</button>
           ${ad.video_path ? '<button class="btn btn-secondary btn-sm" onclick="previewVideo(\'' + escHtml(ad.video_path) + '\')">预览视频</button>' : ''}
           <button class="btn btn-ghost-danger btn-sm" onclick="deleteProductAd(${ad.id})" title="删除">✕</button>
         </div>
@@ -556,6 +614,7 @@ async function loadProductAds() {
 async function continueProductAd(id) {
   try {
     const ad = await api(API + '/product-ad/' + id);
+    _lastFetchedAd = ad;
     currentAdId = id;
     uploadedPhotoIds = JSON.parse(ad.photo_ids || '[]');
     // 填充表单
@@ -568,6 +627,7 @@ async function continueProductAd(id) {
       $('#prodAudience').value = info.target_audience || '';
       if (info.visual_style) $('#prodVisualStyle').value = info.visual_style;
       if (info.showcase_style) $('#prodShowcaseStyle').value = info.showcase_style;
+      if (info.style_preference) $('#prodStylePreference').value = info.style_preference;
     }
     showProductStepFlow();
     // 根据状态跳转到对应步骤
@@ -617,6 +677,45 @@ async function deleteProductAd(id) {
   } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
 }
 
+async function viewProductAdScript(id) {
+  try {
+    const ad = await api(API + '/product-ad/' + id);
+    _lastFetchedAd = ad;
+    const script = typeof ad.script_content === 'string' ? JSON.parse(ad.script_content || '{}') : (ad.script_content || {});
+    const scenes = script.scenes || script.script || [];
+    const tags = script.tags || [];
+    const showcaseMap = { visual: '视觉展示', story: '剧情带货' };
+
+    $('#modalTitle').textContent = ad.title || '带货剧本';
+    $('#modalBody').innerHTML = `
+      <p><strong>商品:</strong> ${escHtml(script.product || ad.title || '—')} | <strong>风格:</strong> ${escHtml(showcaseMap[script.showcase_style] || script.showcase_style || '—')}</p>
+      <p><strong>状态:</strong> ${statusLabel(ad.status)} | <strong>评分:</strong> ${ad.review_score !== null && ad.review_score !== undefined ? ad.review_score + '/10' : '—'}</p>
+      ${script.setting ? '<p><strong>场景设定:</strong> ' + escHtml(script.setting) + '</p>' : ''}
+      ${script.background_music ? '<p><strong>背景音乐:</strong> ' + escHtml(script.background_music) + '</p>' : ''}
+      ${tags.length ? '<p>' + tags.map(t => '<span class="tag">' + escHtml(t) + '</span>').join(' ') + '</p>' : ''}
+      <h3>场景列表 (${scenes.length} 个)</h3>
+      ${scenes.map(s => `
+        <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;margin-bottom:8px;">
+          <strong>场景 ${s.scene || '?'}</strong> <span style="color:var(--text-tertiary);">${s.duration_seconds || '—'}s</span>
+          ${s.camera_angle ? '<div style="font-size:0.85rem;margin-top:4px;"><span style="color:var(--gold-light);">镜头:</span> ' + escHtml(s.camera_angle) + '</div>' : ''}
+          ${s.action ? '<div style="font-size:0.85rem;margin-top:2px;"><span style="color:var(--gold-light);">动作:</span> ' + escHtml(s.action) + '</div>' : ''}
+          ${s.product_focus ? '<div style="font-size:0.85rem;margin-top:2px;"><span style="color:var(--gold-light);">展示:</span> ' + escHtml(s.product_focus) + '</div>' : ''}
+        </div>
+      `).join('')}
+      <h3 style="cursor:pointer;color:var(--gold-light);" onclick="
+        const raw=document.getElementById('rawScriptBlock_${id}');
+        const showing=raw.style.display!=='none';
+        raw.style.display=showing?'none':'block';
+        this.querySelector('span').textContent=showing?'▶ 原始 JSON':'▼ 原始 JSON';
+      "><span>▶ 原始 JSON</span></h3>
+      <pre id="rawScriptBlock_${id}" style="display:none;max-height:300px;overflow-y:auto;">${escHtml(JSON.stringify(script, null, 2))}</pre>
+    `;
+    $('#detailModal').classList.add('active');
+  } catch (e) {
+    showToast('加载剧本失败: ' + e.message, 'error');
+  }
+}
+
 $('#refreshProductBtn').addEventListener('click', loadProductAds);
 $('#newProductBtn').addEventListener('click', () => {
   // 重置表单
@@ -627,6 +726,7 @@ $('#newProductBtn').addEventListener('click', () => {
   $('#prodAudience').value = '';
   $('#prodVisualStyle').value = 'realistic';
   $('#prodShowcaseStyle').value = 'story';
+  $('#prodStylePreference').value = '';
   currentAdId = null;
   uploadedPhotoIds = [];
   goToStep(STEPS.UPLOAD);
@@ -743,6 +843,7 @@ $('#createDraftBtn').addEventListener('click', async () => {
         description: $('#prodDesc').value.trim(),
         selling_points: $('#prodSellingPoints').value.trim(),
         target_audience: $('#prodAudience').value.trim(),
+        style_preference: $('#prodStylePreference').value,
         photo_ids: uploadedPhotoIds,
         visual_style: $('#prodVisualStyle').value,
         showcase_style: $('#prodShowcaseStyle').value,
@@ -939,6 +1040,7 @@ async function runScriptGeneration() {
         description: info.description || '',
         selling_points: info.selling_points || '',
         target_audience: info.target_audience || '',
+        style_preference: info.style_preference || $('#prodStylePreference').value || '',
         photo_ids: uploadedPhotoIds,
         visual_style: info.visual_style || 'realistic',
         showcase_style: info.showcase_style || 'story',
@@ -946,6 +1048,7 @@ async function runScriptGeneration() {
       })
     });
     renderScriptPreview(res);
+    _lastFetchedAd = res;
   } catch (e) {
     $('#scriptLoading').style.display = 'none';
     showToast('剧本生成失败: ' + e.message, 'error');
@@ -1060,6 +1163,7 @@ $('#doRetryScriptBtn').addEventListener('click', async () => {
       body: JSON.stringify({ ad_id: currentAdId, feedback })
     });
     renderScriptPreview(res);
+    _lastFetchedAd = res;
     showToast('剧本已重新生成', 'success');
   } catch (e) {
     $('#scriptLoading').style.display = 'none';
@@ -1090,6 +1194,7 @@ $('#generateVideoBtn').addEventListener('click', async () => {
       $('#videoGenStatus').textContent = `AI 正在生成视频... ${waited}s`;
       try {
         const ad = await api(API + '/product-ad/' + currentAdId);
+        _lastFetchedAd = ad;
         if (ad.status === 'video_done') {
           clearInterval(pollTimer);
           $('#videoGenLoading').style.display = 'none';
