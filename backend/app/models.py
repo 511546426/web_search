@@ -68,6 +68,7 @@ class ProductAd(Base):
     tags = Column(Text, nullable=True)
     video_path = Column(String(500), nullable=True)
     review_score = Column(Float, nullable=True)
+    review_detail = Column(Text, nullable=True)  # JSON: 完整评审结果（分维度评分+优缺点+改进建议）
     error_message = Column(Text, nullable=True)
     # 步骤确认状态
     composite_confirmed = Column(Boolean, default=False)

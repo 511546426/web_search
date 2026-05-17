@@ -134,6 +134,11 @@ function goToStepInteractive(step) {
       $('#generateVideoBtn').disabled = true;
     }
   } else if (step === STEPS.COMPOSITE) {
+    if (!uploadedPhotoIds || !uploadedPhotoIds.length) {
+      showToast('无商品照片，跳过合成步骤', 'info');
+      goToStep(STEPS.SCRIPT);
+      return;
+    }
     runCompositePreview();
   }
 }
@@ -655,11 +660,18 @@ async function continueProductAd(id) {
         runScriptGeneration();
       }
     } else {
-      // 已有照片的草稿 → 直接跳到合成预览
       const hasPhotos = uploadedPhotoIds && uploadedPhotoIds.length > 0;
       if (hasPhotos) {
         goToStep(STEPS.COMPOSITE);
         runCompositePreview();
+      } else if (ad.composite_confirmed) {
+        // 无照片但已确认合成 → 直接进入剧本步骤
+        goToStep(STEPS.SCRIPT);
+        if (ad.script_content && ad.script_content !== '{}') {
+          renderScriptPreview(ad);
+        } else {
+          runScriptGeneration();
+        }
       } else {
         goToStep(STEPS.UPLOAD);
       }
@@ -811,9 +823,8 @@ $('#uploadVideoBtn').addEventListener('click', async () => {
 });
 
 function checkCanCreateDraft() {
-  const hasPhotos = uploadedPhotoIds.length > 0;
   const hasName = $('#prodName').value.trim().length > 0;
-  $('#createDraftBtn').disabled = !(hasPhotos && hasName);
+  $('#createDraftBtn').disabled = !hasName;
 }
 
 $('#prodName').addEventListener('input', checkCanCreateDraft);
@@ -822,16 +833,22 @@ $('#prodName').addEventListener('input', checkCanCreateDraft);
 $('#createDraftBtn').addEventListener('click', async () => {
   const name = $('#prodName').value.trim();
   if (!name) { showToast('请填写商品名称', 'warning'); return; }
-  if (uploadedPhotoIds.length === 0) { showToast('请先上传照片', 'warning'); return; }
+  const hasPhotos = uploadedPhotoIds.length > 0;
 
   const btn = $('#createDraftBtn');
   btn.disabled = true; btn.textContent = '创建中...';
   try {
-    // 如果是继续已有草稿（currentAdId 已存在），直接跳到合成步骤
+    // 如果是继续已有草稿（currentAdId 已存在）
     if (currentAdId) {
-      showToast('继续合成检测...', 'success');
-      goToStep(STEPS.COMPOSITE);
-      runCompositePreview();
+      if (hasPhotos) {
+        showToast('继续合成检测...', 'success');
+        goToStep(STEPS.COMPOSITE);
+        runCompositePreview();
+      } else {
+        showToast('直接生成剧本...', 'success');
+        goToStep(STEPS.SCRIPT);
+        runScriptGeneration();
+      }
       btn.disabled = false; btn.textContent = '开始制作 →';
       return;
     }
@@ -850,9 +867,15 @@ $('#createDraftBtn').addEventListener('click', async () => {
       })
     });
     currentAdId = res.ad_id;
-    showToast('草稿已创建，开始合成检测...', 'success');
-    goToStep(STEPS.COMPOSITE);
-    runCompositePreview();
+    if (hasPhotos) {
+      showToast('草稿已创建，开始合成检测...', 'success');
+      goToStep(STEPS.COMPOSITE);
+      runCompositePreview();
+    } else {
+      showToast('草稿已创建，开始生成剧本...', 'success');
+      goToStep(STEPS.SCRIPT);
+      runScriptGeneration();
+    }
   } catch (e) { showToast('创建失败: ' + e.message, 'error'); }
   btn.disabled = false; btn.textContent = '开始制作 →';
 });
@@ -1081,6 +1104,9 @@ function renderScriptPreview(data) {
     ${scriptData.cta ? '<div style="margin-top:4px;font-size:0.85rem;color:var(--gold-light);"><strong>CTA：</strong>' + escHtml(scriptData.cta) + '</div>' : ''}
   `;
 
+  // Review detail (dimensions, strengths, weaknesses)
+  renderReviewDetail(data);
+
   // Reference photos
   let photosForScript = uploadedPhotoIds && uploadedPhotoIds.length ? uploadedPhotoIds : [];
   if (!photosForScript.length && data.photo_ids) {
@@ -1120,6 +1146,65 @@ function renderScriptPreview(data) {
 
   $('#scriptStatusBadge').textContent = '已生成 ✓';
   showToast('带货剧本已生成', 'success');
+}
+
+function renderReviewDetail(data) {
+  const el = $('#scriptReviewDetail');
+  let review;
+  try {
+    review = typeof data.review_detail === 'string' ? JSON.parse(data.review_detail) : data.review_detail;
+  } catch { review = null; }
+  if (!review || !review.dimensions) { el.style.display = 'none'; return; }
+
+  const dims = review.dimensions;
+  const dimNames = {
+    story_completeness: '故事完整性', character_depth: '角色深度', scene_logic: '场景逻辑',
+    visual_feasibility: '视觉可行性', dialogue_quality: '对白质量', pacing: '节奏把控',
+    hook_strength: '开场钩子', info_density: '信息密度', product_persuasion: '产品说服力',
+    visual_diversity: '视觉多样性', scene_flow: '场景衔接', ai_executability: 'AI可执行性'
+  };
+
+  function scoreClass(s) { return s >= 8 ? 'high' : s >= 6 ? 'mid' : 'low'; }
+
+  const dimsHtml = Object.entries(dims).map(([k, v]) => {
+    const name = dimNames[k] || k;
+    const s = v.score || 0;
+    const pct = Math.round((s / 10) * 100);
+    return `
+      <div class="dim-item">
+        <div class="dim-header">
+          <span class="dim-name">${name}</span>
+          <span class="dim-score ${scoreClass(s)}">${s}</span>
+        </div>
+        <div class="dim-bar-track"><div class="dim-bar-fill ${scoreClass(s)}" style="width:${pct}%"></div></div>
+      </div>`;
+  }).join('');
+
+  const strengthsHtml = review.strengths && review.strengths.length
+    ? `<div class="review-strengths"><h5>✓ 优点</h5><ul>${review.strengths.map(t => '<li>' + escHtml(t) + '</li>').join('')}</ul></div>` : '';
+  const weaknessesHtml = review.weaknesses && review.weaknesses.length
+    ? `<div class="review-weaknesses"><h5>△ 待改进</h5><ul>${review.weaknesses.map(t => '<li>' + escHtml(t) + '</li>').join('')}</ul></div>` : '';
+
+  el.innerHTML = `
+    <div class="review-header" onclick="toggleReviewDetail()">
+      <span class="toggle-icon" id="reviewToggleIcon">▼</span>
+      <span class="review-summary">${escHtml(review.summary || '')}</span>
+      <span class="tag review-score">${review.overall_score != null ? review.overall_score + '/10' : ''}</span>
+    </div>
+    <div class="review-body" id="reviewBody">
+      <div class="dimensions-grid">${dimsHtml}</div>
+      ${strengthsHtml}
+      ${weaknessesHtml}
+    </div>`;
+  el.style.display = 'block';
+}
+
+function toggleReviewDetail() {
+  const body = document.getElementById('reviewBody');
+  const icon = document.getElementById('reviewToggleIcon');
+  if (!body || !icon) return;
+  const collapsed = body.classList.toggle('collapsed');
+  icon.textContent = collapsed ? '▶' : '▼';
 }
 
 // Raw JSON toggle

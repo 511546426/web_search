@@ -128,6 +128,7 @@ class ProductAdScriptResponse(BaseModel):
     product_info: str
     photo_ids: str
     review_score: Optional[float] = None
+    review_detail: Optional[str] = None
     composite_confirmed: bool = False
     composite_photo_ids: Optional[str] = None
     composite_retry_count: int = 0

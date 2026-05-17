@@ -63,6 +63,7 @@ def _run_lightweight_migrations() -> None:
     _add_column_if_missing("product_ads", "composite_retry_count", "composite_retry_count INTEGER DEFAULT 0")
     _add_column_if_missing("product_ads", "script_confirmed", "script_confirmed BOOLEAN DEFAULT 0")
     _add_column_if_missing("product_ads", "script_user_feedback", "script_user_feedback TEXT")
+    _add_column_if_missing("product_ads", "review_detail", "review_detail TEXT")
 
     # novels: 兼容旧表
     _add_column_if_missing("novels", "error_message", "error_message TEXT")

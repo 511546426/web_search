@@ -248,23 +248,31 @@ def revise_script(script_data: Dict, review_result: Dict) -> Dict:
     return result
 
 
-def auto_review_loop(script_data: Dict, max_iterations: int = 5, target_score: float = 8.0) -> Dict:
-    """自动评审循环：评审 → 不达标则修改 → 再评审 → 直到达标或达上限.
+def auto_review_loop(script_data: Dict, max_iterations: int = 5, target_score: float = 8.5) -> Dict:
+    """自动评审循环：评审 → 修改 → 再评审 → 直到达标或达上限.
 
+    无论首次评分是否达标，至少进行一轮修改+再评审。
     返回 { "script": 最终剧本, "review": 最终评审, "iterations": 实际轮次, "achieved_target": 是否达标 }
     """
     current = dict(script_data)
     for i in range(max_iterations):
         review = review_script(current)
         score = review.get("overall_score", 0)
-        if score >= target_score or i == max_iterations - 1:
+        if i == max_iterations - 1:
             return {
                 "script": current,
                 "review": review,
                 "iterations": i + 1,
                 "achieved_target": score >= target_score,
             }
-        # 修改
+        # 至少完成一轮修改后才检查是否达标
+        if score >= target_score and i > 0:
+            return {
+                "script": current,
+                "review": review,
+                "iterations": i + 1,
+                "achieved_target": True,
+            }
         current = revise_script(current, review)
     return {
         "script": current,
@@ -273,3 +281,142 @@ def auto_review_loop(script_data: Dict, max_iterations: int = 5, target_score: f
         "achieved_target": False,
     }
 
+
+# ==============================================================
+# 视觉展示专用评审系统（适配纯画面、无对白、无角色的商品展示剧本）
+# ==============================================================
+
+VISUAL_REVIEW_SYSTEM = """你是一名抖音电商短视频内容评审专家，过去 3 年评审过 50000+ 条带货短视频。你深知：在抖音信息流里，前 3 秒决定生死，每 1 秒必须有有效信息量，用户不会给第二条机会。
+
+## 评审维度
+
+| 维度 | 权重 | 优秀（8-10）| 及格（6-7）| 不及格（0-5）|
+|------|------|-----------|----------|-----------|
+| hook_strength | 最高 | 第一镜就是视觉暴击——动作/构图/光影瞬间抓眼，用户不会划走 | 第一镜有看点但不够炸，可能被划走 | 第一镜是背影/空镜/慢起，在抖音必死 |
+| info_density | 高 | 每镜 2+ 个有效产品信息点（面料/版型/细节/场景），无注水镜头 | 大部分镜头有信息，个别镜头空洞 | 大量无效镜头，产品信息靠脑补 |
+| product_persuasion | 高 | 看完有「想要」的冲动，卖点通过画面本身传递而非文字 | 产品展示清楚但缺乏感染力 | 看完记不住产品长什么样 |
+| visual_diversity | 高 | 景别/角度/运镜有明显变化，远中近特交替有节奏感 | 有变化但规律可预测，略显模板化 | 全程中景正面固定，监控摄像头式展示 |
+| scene_flow | 中 | 相邻镜头动作/视线/运镜方向自然衔接，有长镜头流畅感 | 衔接通顺但无亮点 | 镜头跳跃、动作断裂、方向矛盾 |
+| ai_executability | 中 | 所有描述具体可量化，Seedance 能直接理解并生成 | 大部分可执行，个别描述偏抽象 | 大量抽象/矛盾描述，AI 无法执行 |
+
+## 评审原则
+- 6 分以上可生成视频，7.5 分以上建议直接发布
+- 评审必须尖锐、具体、可落地。不说「产品展示不够好」，说「第 3 镜只展示了大面积纯色面料，缺少版型/剪裁线条/缝线细节的信息输出」
+- 对「前 3 秒吸引力」要极严格——这是抖音，不是官网首页
+- 指出具体场景编号，而非笼统评价
+- 对 AI 可执行性严格把关——如果描述了「光影交错」「氛围感」这种 Seedance 无法执行的概念，必须指出
+
+输出严格 JSON，不得包含 markdown 标记：
+
+{
+  "overall_score": 7.0,
+  "summary": "总体评价（尖锐具体，1-2 句点出核心问题）",
+  "strengths": ["优点1", "优点2"],
+  "weaknesses": ["不足1（指出具体场景）", "不足2"],
+  "suggestions": ["改进建议（可直接执行的镜头级修改方案）", "改进建议2"],
+  "ready_for_video": true,
+  "dimensions": {
+    "hook_strength": {"score": 6, "note": "第1镜具体评价"},
+    "info_density": {"score": 7, "note": "具体评价"},
+    "product_persuasion": {"score": 7, "note": "具体评价"},
+    "visual_diversity": {"score": 6, "note": "具体评价"},
+    "scene_flow": {"score": 7, "note": "具体评价"},
+    "ai_executability": {"score": 8, "note": "具体评价"}
+  }
+}"""
+
+VISUAL_REVISE_SYSTEM = """你是一名抖音电商短视频创意总监，擅长在保持产品信息不变的前提下，将平庸的商品展示剧本打磨成高转化爆款。
+
+## 修改原则
+1. **精准回应每条批评**：每条 weaknesses 和 suggestions 必须在修改中体现
+2. **保持优点不破坏**：strengths 中指出的好部分不能改掉
+3. **前 3 秒是最高优先级**：第一镜必须重构成视觉钩子——动态入场/快摇揭示/细节冲击/对比反差，四选一
+4. **信息密度翻倍**：每镜至少传达 2 个产品信息点（外观+质感、版型+垂坠、细节+工艺等组合）
+5. **打破模板感**：如果原始剧本景别单调（全中景），主动引入远/近/特交替；如果角度单调（全正面），引入侧/背/3/4 变化
+6. **AI 可执行**：所有描述具体到 Seedance 可直接理解——「柔光」改成「柔和漫射自然光，从左上方 45° 入射」，「高级感」改成「哑光微亮面料质感，无明显折痕」
+7. **不改变核心信息**：不改产品名称、品类、风格设定、场景数量
+
+## 修改优先级
+1. 前 3 秒钩子（hook_strength ≤ 6 必须重构第一镜）
+2. 信息密度（info_density ≤ 6 必须给每镜增加信息点）
+3. 视觉多样性（visual_diversity ≤ 6 必须重新分配景别/角度/运镜）
+4. 场景衔接和 AI 可执行性
+
+保持 JSON 结构不变，输出完整优化后的剧本 JSON，不得包含任何额外文字。"""
+
+
+def review_visual_script(script_data: Dict) -> Dict:
+    """评审视觉展示带货剧本的质量和传播力。
+
+    返回格式与 review_script() 一致：
+      { overall_score, summary, strengths, weaknesses, suggestions, ready_for_video, dimensions }
+    """
+    script_json = json.dumps(script_data, ensure_ascii=False)
+
+    prompt = f"""Review this visual product showcase script for Douyin/TikTok short video:
+
+{script_json}
+
+Evaluate across all 6 dimensions and give actionable, shot-level suggestions for improvement.
+Be especially strict about the first 3 seconds — if Scene 1 doesn't grab attention instantly, call it out specifically."""
+
+    return chat_json(prompt, system=VISUAL_REVIEW_SYSTEM, temperature=0.3, max_tokens=4096)
+
+
+def revise_visual_script(script_data: Dict, review_result: Dict) -> Dict:
+    """根据评审反馈修改视觉展示剧本，返回改进版."""
+    visual_style = script_data.get("visual_style", "realistic")
+
+    prompt = f"""根据评审反馈优化以下商品视觉展示剧本。
+
+原始剧本：
+{json.dumps(script_data, ensure_ascii=True)}
+
+评审指出的不足：
+{json.dumps(review_result.get('weaknesses', []), ensure_ascii=True)}
+
+评审改进建议：
+{json.dumps(review_result.get('suggestions', []), ensure_ascii=True)}
+
+严格遵循修改原则，输出优化后的完整剧本 JSON，不得包含任何额外文字。"""
+
+    result = chat_json(prompt, system=VISUAL_REVISE_SYSTEM, temperature=0.7, max_tokens=4096)
+    result["visual_style"] = visual_style
+    result["showcase_style"] = script_data.get("showcase_style", "visual")
+    if "image_description" in script_data:
+        result["image_description"] = script_data["image_description"]
+    return result
+
+
+def auto_review_loop_visual(script_data: Dict, max_iterations: int = 3, target_score: float = 7.0) -> Dict:
+    """视觉展示剧本自动评审循环。
+
+    无论首次评分是否达标，至少进行一轮修改+再评审。
+    返回 { "script": 最终剧本, "review": 最终评审, "iterations": 实际轮次, "achieved_target": 是否达标 }
+    """
+    current = dict(script_data)
+    for i in range(max_iterations):
+        review = review_visual_script(current)
+        score = review.get("overall_score", 0)
+        if i == max_iterations - 1:
+            return {
+                "script": current,
+                "review": review,
+                "iterations": i + 1,
+                "achieved_target": score >= target_score,
+            }
+        # 至少完成一轮修改后才检查是否达标
+        if score >= target_score and i > 0:
+            return {
+                "script": current,
+                "review": review,
+                "iterations": i + 1,
+                "achieved_target": True,
+            }
+        current = revise_visual_script(current, review)
+    return {
+        "script": current,
+        "review": review_visual_script(current),
+        "iterations": max_iterations,
+        "achieved_target": False,
+    }

@@ -440,6 +440,113 @@ header h1 {
   font-weight: 600;
 }
 
+/* ---- 评审详情 ---- */
+.script-review-detail {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.review-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.review-header:hover { background: var(--hover); }
+
+.review-header .toggle-icon {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  transition: transform 0.2s;
+}
+
+.review-header .review-summary {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-body { padding: 12px 14px; }
+
+.review-body.collapsed { display: none; }
+
+.dimensions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dim-item { margin-bottom: 2px; }
+
+.dim-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+}
+
+.dim-name { color: var(--text-secondary); }
+
+.dim-score {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dim-score.high { color: var(--green); }
+.dim-score.mid { color: var(--gold); }
+.dim-score.low { color: var(--red); }
+
+.dim-bar-track {
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.dim-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.dim-bar-fill.high { background: var(--green); }
+.dim-bar-fill.mid { background: var(--gold); }
+.dim-bar-fill.low { background: var(--red); }
+
+.review-strengths, .review-weaknesses {
+  margin-bottom: 8px;
+}
+
+.review-strengths h5, .review-weaknesses h5 {
+  font-size: 0.8rem;
+  margin: 0 0 4px;
+  color: var(--text-secondary);
+}
+
+.review-strengths ul, .review-weaknesses ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.review-strengths li { color: var(--green); }
+.review-weaknesses li { color: var(--gold-light); }
+.review-strengths li + li, .review-weaknesses li + li { margin-top: 2px; }
+
 .tag.genre-tag {
   background: var(--blue-bg);
   color: var(--blue);

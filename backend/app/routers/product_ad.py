@@ -7,6 +7,7 @@
 import json
 import os
 import logging
+import random
 import threading
 from datetime import datetime
 from typing import List, Optional
@@ -35,6 +36,125 @@ PRODUCT_PHOTO_DIR = os.path.join(
 os.makedirs(PRODUCT_PHOTO_DIR, exist_ok=True)
 
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
+
+
+# ==============================================================
+# 随机化创意参数池（避免剧本同质化）
+# ==============================================================
+
+LOCATION_POOL = [
+    "精品买手店二层阳光房，白色木窗框，窗外可见绿植，浅木色地板，米色亚麻沙发，龟背竹点缀",
+    "简约 loft 公寓，整面落地窗引入午后柔光，灰色微水泥墙面，金属线条吊灯，深色木质地板",
+    "街角咖啡馆户外座位区，藤编椅子配大理石小圆桌，午后柔光透过浅色遮阳伞，地面铺着碎石子",
+    "大学校园梧桐大道，秋日午后斜阳穿过树叶洒在地面形成斑驳光影，远处可见红砖教学楼",
+    "现代艺术画廊白盒子空间，水泥自流平地面，极简轨道灯，大幅抽象画作作为背景",
+    "屋顶花园黄昏时分，城市天际线在暖金色光线中若隐若现，木质地板，低矮绿植环绕",
+    "日系杂货铺角落，暖黄灯光，木架上摆满手作器物，窗边挂着干燥花束，气氛安静治愈",
+    "健身房落地镜前区域，黑色橡胶地板，自然光从高位窗户洒入，器材作为背景虚化",
+    "地铁站台傍晚时分，暖色灯光与窗外深蓝天光交汇，列车驶过的动态模糊作为背景",
+    "文创园区红砖墙前，爬山虎覆盖半面墙，地面上有老工业遗留的铁轨痕迹",
+    "海边木栈道清晨，柔和晨光，远处海面波光粼粼，木质栏杆形成引导线构图",
+    "城市天台傍晚，远处高楼的灯光开始亮起，天边是深蓝到橙红的渐变色",
+]
+
+LIGHTING_POOL = [
+    ("柔和漫射自然光，从左上方 45° 入射，干净通透，无明显阴影", "natural_diffuse"),
+    ("暖金色侧光，从窗或门一侧斜射，勾勒出产品轮廓的戏剧性光边", "golden_side"),
+    ("柔光箱质感正面光，光线均匀包裹主体，适合突出面料细节和色彩还原", "softbox_front"),
+    ("逆光+正面补光，主体边缘有发光轮廓，正面细节依然清晰", "backlight_fill"),
+    ("顶部天窗自然光，光线从正上方洒落，形成柔和的顶光层次", "top_skylight"),
+    ("黄昏暖光+室内暖灯混合，色调偏暖，有生活氛围和故事感", "golden_hour_mix"),
+]
+
+CAMERA_STYLE_POOL = [
+    ("快节奏动态开场：第一镜直接是产品动态特写（如面料飘动/模特大步走/快速转身），跳切切换场景，运镜以快摇+跟随为主",
+     "fast_dynamic"),
+    ("慢推电影感：每镜以缓慢推近或拉远为主，固定镜头间用 dissolve 式衔接，强调氛围和质感",
+     "slow_cinematic"),
+    ("动静交替节奏：固定镜头展示产品整体 → 快速环绕展示细节 → 固定镜头定帧收尾，张弛交替",
+     "dynamic_static_mix"),
+    ("手持纪实感：镜头微晃，跟随模特自然走动，像朋友随手拍的生活记录，弱化刻意摆拍感",
+     "handheld_documentary"),
+    ("升格慢动作点缀：正常速度展示穿戴效果 → 1-2 个关键镜头用慢动作（面料飘起/转身瞬间），强调高级感",
+     "slowmo_accent"),
+]
+
+OPENING_HOOK_POOL = [
+    ("产品动态入场：模特从画面外走进或转身面向镜头，第一帧就有动态",
+     "dynamic_entrance"),
+    ("细节冲击：开场即是产品的关键细节特写（面料纹理/刺绣/拉链），然后快速拉远揭示全貌",
+     "detail_reveal"),
+    ("光影反差：利用侧光或逆光勾勒产品轮廓，用光影本身作为视觉钩子",
+     "lighting_contrast"),
+    ("上身即变：模特从侧身/背面快速转身正面展示，转身瞬间作为开场冲击",
+     "turn_reveal"),
+    ("场景交互：模特与场景中的物体互动（推开玻璃门/拿起咖啡杯/拨开绿植），用动作吸引注意",
+     "scene_interaction"),
+]
+
+
+def _pick_random() -> dict:
+    """每次调用随机组合一组创意参数，保证每次生成的剧本有不同的视觉风格."""
+    location = random.choice(LOCATION_POOL)
+    lighting, _ = random.choice(LIGHTING_POOL)
+    camera_style, _ = random.choice(CAMERA_STYLE_POOL)
+    hook, _ = random.choice(OPENING_HOOK_POOL)
+    return {
+        "location": location,
+        "lighting": lighting,
+        "camera_style": camera_style,
+        "opening_hook": hook,
+    }
+
+
+def _get_category_strategy(category: str) -> str:
+    """按商品品类返回差异化的展示策略提示."""
+    c = (category or "").lower()
+    if any(kw in c for kw in ["服装", "穿搭", "t恤", "套装", "polo", "衬衫", "裤", "裙", "外套", "卫衣", "毛衣", "夹克"]):
+        return """【品类策略：服装/穿搭】
+- 展示顺序：整体版型 → 动态垂坠 → 面料质感 → 细节工艺 → 搭配效果
+- 关键时刻：模特转身时面料飘动的瞬间、坐下/弯腰时衣服自然褶皱与恢复
+- 必展示：肩线剪裁、领口车线、下摆垂感、袖口设计
+- 避免：全程静态站立——必须包含行走/转身/坐下/抬手等动态"""
+
+    if any(kw in c for kw in ["美妆", "护肤", "化妆", "口红", "粉底", "精华", "面霜", "眼影"]):
+        return """【品类策略：美妆/护肤】
+- 展示顺序：产品外观 → 质地特写（推开/涂抹/吸收）→ 使用效果 → 光泽/妆感对比
+- 关键时刻：产品挤出的瞬间、在皮肤上推开的质地变化、使用前后的光泽对比
+- 必展示：产品包装质感、质地（流动性/细腻度）、上脸/上手后的效果
+- 避免：只拍瓶子不展示质地的「静物摄影」"""
+
+    if any(kw in c for kw in ["食品", "零食", "饮品", "饮料", "咖啡", "茶", "酒", "糕点", "面包"]):
+        return """【品类策略：食品/饮品】
+- 展示顺序：产品外观 → 动态质感（蒸汽/流动/倾倒/切开）→ 食用/饮用瞬间 → 满足感
+- 关键时刻：倾倒时液体流动、切开时内部结构、咬下时的质感
+- 必展示：色泽饱和度、动态质感（蒸汽/气泡/拉丝/酥脆）、食用场景
+- 避免：全程静态摆放——必须包含动态的食用/制作过程"""
+
+    if any(kw in c for kw in ["数码", "3c", "电子", "手机", "耳机", "手表", "音箱", "电脑", "相机"]):
+        return """【品类策略：数码/3C】
+- 展示顺序：整体设计 → 接口/按键细节 → 手持比例 → 使用场景 → 质感特写
+- 关键时刻：屏幕点亮瞬间、设备翻转时的金属反光、手部操作交互
+- 必展示：产品厚度/重量感（手持展示）、接口设计、材质对比（金属/玻璃/皮革）
+- 避免：纯产品旋转——必须包含手持使用场景"""
+
+    if any(kw in c for kw in ["配饰", "包", "首饰", "项链", "手链", "戒指", "耳环", "帽子", "墨镜", "围巾"]):
+        return """【品类策略：配饰】
+- 展示顺序：整体搭配 → 微距细节 → 佩戴动态 → 光线下的质感变化
+- 关键时刻：佩戴瞬间、光线在金属/宝石表面移动时的折射
+- 必展示：细节工艺（镶嵌/缝线/打磨）、与服装的搭配效果、不同角度下的光泽
+- 避免：远距离平面展示——配饰需要大量微距特写"""
+
+    # 通用策略
+    return """【品类策略：通用展示】
+- 展示顺序：产品外观 → 细节特写 → 使用/穿戴效果 → 场景融入
+- 核心原则：前 3 秒必须有视觉冲击，每镜必须有明确的产品信息输出
+- 避免：连续使用相同景别/角度，避免全程无动态的静物展示"""
+
+
+# ==============================================================
+# 随机化参数定义结束
+# ==============================================================
 
 
 def _photo_url(filename: str) -> str:
@@ -118,6 +238,7 @@ def create_draft(body: ProductInfoRequest, db: Session = Depends(get_db)):
         genre="带货",
         status="draft",
         tags="带货",
+        composite_confirmed=len(body.photo_ids or []) == 0,  # 无照片则跳过合成步骤
     )
     db.add(ad)
     db.commit()
@@ -324,8 +445,14 @@ def _generate_ad_script(product: ProductInfoRequest, user_feedback: str = "") ->
     visual_style_text = "真人实景拍摄，真人出镜或产品实拍展示" if product.visual_style == "realistic" else "动漫风格，二维动画展示产品"
     style_note = "写实、真实产品展示" if product.visual_style == "realistic" else "二次元动漫风格"
 
+    creative_params = None
     if product.showcase_style == "visual":
-        system = _build_visual_system_prompt(product, style_note)
+        creative_params = _pick_random()
+        logger.info(f"Creative params: location={creative_params['location'][:40]}..., "
+                    f"lighting={creative_params['lighting'][:30]}..., "
+                    f"camera={creative_params['camera_style'][:30]}..., "
+                    f"hook={creative_params['opening_hook'][:30]}...")
+        system = _build_visual_system_prompt(product, style_note, creative_params)
     else:
         system = _build_story_system_prompt(product, style_note)
 
@@ -381,32 +508,65 @@ Return ONLY the JSON."""
     return result
 
 
-def _build_visual_system_prompt(product, style_note):
-    return f"""你是一名从业 15 年的时尚广告导演。你擅长用纯视觉语言讲述产品故事。
+def _build_visual_system_prompt(product, style_note, creative_params=None):
+    if creative_params is None:
+        creative_params = _pick_random()
+
+    location = creative_params["location"]
+    lighting = creative_params["lighting"]
+    camera_style = creative_params["camera_style"]
+    opening_hook = creative_params["opening_hook"]
+    category_strategy = _get_category_strategy(product.category)
+
+    return f"""你是一名抖音电商短视频创意导演，擅长在 15 秒内用纯视觉语言让用户产生购买欲望。你的视频完播率和转化率在团队里排名第一。
+
+## 🎬 本次拍摄创意方向（每次随机组合，避免同质化）
+
+**指定场景（必须使用）**：{location}
+**指定光线风格（必须遵循）**：{lighting}
+**指定运镜风格（必须遵循）**：{camera_style}
+**指定开场方式（必须遵循）**：{opening_hook}
+
+{category_strategy}
+
 ## 视觉叙事体系
-- Establishing → Detail → Motion → Lifestyle → Climax
-## 镜头连贯性（极其重要）
-- 相邻场景之间必须有视觉连贯性：动作延续、视线方向一致、运镜方向衔接
-- 每个场景的 action 必须承接上一个场景的结尾动作或姿态，形成流畅的长镜头感
-- 景别变化遵循递进逻辑，避免跳跃：远→中→近→特→中→远，相邻景别跨度不超过两级
-- 运镜方向在相邻场景间保持一致流向（如从左到右的环绕 → 下一镜继续从左到右的推近）
-- 模特/主体的姿态和视线在相邻场景间保持连贯，不突然改变方向
-## 镜头语言
-景别：远景全身、中景半身、近景特写、大特写
-角度序列：正面 → 侧面 → 背面 → 3/4 → 动态 → 特写
-运镜：固定、缓慢推近、环绕、跟随、升降
-## 场景背景设计
-- 禁止纯色背景/摄影棚/白墙
-- 所有场景在同一实景环境中（禁止红砖墙/水泥墙）
-- 优选室内或半室内柔光环境（精品买手店、艺术展厅、阳光房、loft公寓、咖啡馆、商场中庭、酒店大堂落地窗旁、屋顶花园黄昏光），避免强烈直射阳光或昏暗环境
-- 同一环境内不同区域变化
+- 抛弃传统的 Establishing → Detail → Motion → Lifestyle → Climax 模板
+- 15 秒内完成一次「看→想买」的心理旅程
+- 总镜头数 5~7 个，每个镜头 1.5~3 秒
+- **第一镜必须是钩子**：按照上述指定开场方式，第一帧就要有信息量，用户在前 3 秒不能划走
+
+## 镜头多样性格要求（极其重要，对抗模板化）
+- 景别必须多样化：远中近特必须交替使用，禁止连续 3 个以上同景别
+- 角度必须有变化：正面/侧面/背面/3-4 角度/低角度/高角度至少使用 4 种
+- 运镜必须有节奏：固定/推近/环绕/跟随/升降至少使用 3 种，按照上述指定运镜风格的节奏来分配
+- 每镜的 camera_angle 必须明确写出景别+角度+运镜三者（如"中景，3/4 侧面，缓慢推近"）
+
+## 镜头连贯性
+- 相邻场景动作/视线/运镜方向衔接自然
+- 景别递进不超过两级（远→中→近→特→中→远）
+- 最后一镜必须是倒数第二镜动作的自然延伸
+
+## 模特出镜要求
+- 每个镜头中模特必须完整、清晰出镜，产品始终穿在模特身上
+- 特写必须以模特身体为载体（如特写左胸刺绣时需同时包含身体轮廓）
+- 严禁空衣架、悬浮衣物、平铺展示
+
+## 肖像权规避
+- 模特面部描述用通用特征词汇，严禁使用明星/艺人姓名
+- 面部特征保持中性、通用，不具有可识别的个人特征
+
+## 场景背景
+- 必须使用上述指定场景，所有场景在同一实景环境内的不同区域
+- 禁止纯色背景/摄影棚/白墙/红砖墙/水泥墙
+
 ## LOGO 要求
-- 商品上如有品牌商标/图案，在拍摄中自然出现即可，不需要专门给商标做大特写
+- 商品上如有品牌商标/图案，在拍摄中自然出现即可，不需要专门大特写
+
 输出 JSON 结构：
 {{
   "title": "...", "product": "...", "genre": "带货/穿搭展示", "theme": "...",
   "showcase_style": "visual", "visual_style": "{product.visual_style}",
-  "setting": "统一场景环境描述",
+  "setting": "上述指定场景的详细描述",
   "scenes": [{{"scene": 1, "camera_angle": "...", "action": "...", "product_focus": "...", "duration_seconds": 2}}],
   "duration_estimate": 15, "tags": [], "background_music": "..."
 }}"""
@@ -420,6 +580,17 @@ def _build_story_system_prompt(product, style_note):
 - 景别变化遵循递进逻辑：远→中→近→特→中→远，相邻景别跨度不超过两级
 - 运镜方向在相邻场景间保持一致流向
 - 模特/主体的姿态和视线在相邻场景间保持连贯
+- **最后一镜衔接规则（极其重要）**：最后一镜的动作必须是倒数第二镜动作的自然延伸，严禁在最后一镜另起一个全新的动作或姿态。倒数第二镜的结尾必须已经启动了最后一镜的动作（如转身、迈步、抬手等），让两镜之间过渡毫无痕迹。倒数第二镜禁止以静态定格结束——必须包含一个微小的动态信号，为最后一镜做铺垫
+- **运镜衔接规则**：相邻镜头的运镜方式不得突变。固定镜头后不能直接接运动镜头；若前一镜为固定，下一镜开头必须也是固定，随后再缓慢启动运动。同理，运动镜头的收尾速度应放缓，为下一镜留出衔接空间
+## 模特出镜要求（极其重要）
+- 每个镜头中模特必须完整、清晰出镜，严禁出现只有衣服/产品而没有模特的镜头
+- 模特从头到尾穿着展示的商品，商品始终穿在模特身上
+- 即使是特写镜头（如面料、图案细节），也必须以模特身体为载体——画面中必须同时包含模特的身体轮廓和穿着状态
+- 严禁出现空衣架、悬浮衣物、平铺展示等无模特的画面
+## 肖像权规避（法律合规要求）
+- 模特的面部描述必须使用通用、匿名化的特征词汇，严禁使用任何真实明星、艺人、公众人物的姓名或外号
+- 禁止在剧本中暗示模特与任何真实人物相似
+- 模特整体气质为"专业商业广告模特"，面部特征保持中性、通用，不具有可识别的个人特征
 ## 黄金开场
 痛点直击 / 结果展示 / 悬念提问 / 冲突引入
 ## 产品展示体系
@@ -457,6 +628,22 @@ def generate_ad_script(body: ProductInfoRequest, db: Session = Depends(get_db)):
 
     script_data = _generate_ad_script(body)
 
+    # 自动评审（无论新建还是更新，都先评审再入库）
+    from app.services.script_writer import auto_review_loop, auto_review_loop_visual
+    review_score = None
+    review_detail = None
+    try:
+        showcase = script_data.get("showcase_style", "story")
+        if showcase == "visual":
+            loop_result = auto_review_loop_visual(script_data)
+        else:
+            loop_result = auto_review_loop(script_data)
+        script_data = loop_result["script"]
+        review_score = loop_result["review"].get("overall_score")
+        review_detail = json.dumps(loop_result["review"], ensure_ascii=False)
+    except Exception:
+        logger.exception("Auto review failed, using raw script")
+
     # 检查是否有 ad_id 参数（复用已有草稿）
     ad_id = getattr(body, "ad_id", None)
     if ad_id:
@@ -470,9 +657,11 @@ def generate_ad_script(body: ProductInfoRequest, db: Session = Depends(get_db)):
             ad.status = "draft"
             ad.tags = ",".join(script_data.get("tags", [])) if isinstance(script_data.get("tags"), list) else "带货"
             ad.script_confirmed = False
+            ad.review_score = review_score
+            ad.review_detail = review_detail
             db.commit()
             db.refresh(ad)
-            logger.info(f"Ad script updated (existing): id={ad.id}")
+            logger.info(f"Ad script updated (existing): id={ad.id}, score={review_score}")
             return ad
 
     ad = ProductAd(
@@ -483,30 +672,13 @@ def generate_ad_script(body: ProductInfoRequest, db: Session = Depends(get_db)):
         genre=script_data.get("genre", "带货"),
         status="draft",
         tags=",".join(script_data.get("tags", [])) if isinstance(script_data.get("tags"), list) else "带货",
+        review_score=review_score,
+        review_detail=review_detail,
     )
     db.add(ad)
     db.commit()
     db.refresh(ad)
-    logger.info(f"Ad script created: id={ad.id}, title={ad.title}")
-
-    # 自动评审
-    try:
-        showcase = script_data.get("showcase_style", "story")
-        if showcase == "visual":
-            ad.review_score = 9.0
-            db.commit()
-        else:
-            from app.services.script_writer import auto_review_loop
-            loop_result = auto_review_loop(script_data)
-            final_script = loop_result["script"]
-            ad.script_content = json.dumps(final_script, ensure_ascii=False)
-            ad.title = final_script.get("title", ad.title)
-            ad.review_score = loop_result["review"].get("overall_score")
-            db.commit()
-    except Exception:
-        logger.exception(f"Auto review failed for ad {ad.id}")
-
-    db.refresh(ad)
+    logger.info(f"Ad script created: id={ad.id}, title={ad.title}, score={review_score}")
     return ad
 
 
@@ -548,11 +720,26 @@ def retry_ad_script(ad_id: int, body: ScriptRetryRequest = None, db: Session = D
     )
     script_data = _generate_ad_script(req, user_feedback=feedback)
 
+    # 重新评审
+    try:
+        showcase = script_data.get("showcase_style", "story")
+        if showcase == "visual":
+            from app.services.script_writer import auto_review_loop_visual
+            loop_result = auto_review_loop_visual(script_data)
+        else:
+            from app.services.script_writer import auto_review_loop
+            loop_result = auto_review_loop(script_data)
+        script_data = loop_result["script"]
+        ad.review_score = loop_result["review"].get("overall_score")
+        ad.review_detail = json.dumps(loop_result["review"], ensure_ascii=False)
+    except Exception:
+        logger.exception(f"Auto review failed for ad retry {ad_id}")
+
     ad.script_content = json.dumps(script_data, ensure_ascii=False)
     ad.script_confirmed = False
     db.commit()
     db.refresh(ad)
-    logger.info(f"Ad script retry done: id={ad_id}")
+    logger.info(f"Ad script retry done: id={ad_id}, score={ad.review_score}")
     return ad
 
 
@@ -600,28 +787,12 @@ def generate_ad_video(ad_id: int, resolution: str = "720p", db: Session = Depend
 
 
 def _do_generate_ad_video_with_review(db, ad_id: int, resolution: str = "720p"):
-    from app.services.script_writer import auto_review_loop
+    """生成带货视频。剧本已在确认时完成评审，此处直接使用已存储的剧本。"""
     ad = db.query(ProductAd).filter(ProductAd.id == ad_id).first()
     if not ad:
         return
-    logger.info(f"Starting auto-review for ad {ad_id}")
-
-    script_data = json.loads(ad.script_content) if isinstance(ad.script_content, str) else ad.script_content
-    showcase_style = script_data.get("showcase_style", "story") if isinstance(script_data, dict) else "story"
-
-    if showcase_style == "visual":
-        final_script = script_data
-        loop_result = {"review": {"overall_score": 9.0, "summary": "视觉展示模式", "ready_for_video": True}, "iterations": 0, "achieved_target": True}
-    else:
-        loop_result = auto_review_loop(script_data)
-        final_script = loop_result["script"]
-
-    ad.script_content = json.dumps(final_script, ensure_ascii=False)
-    ad.title = final_script.get("title", ad.title)
-    ad.review_score = loop_result["review"].get("overall_score")
-    db.commit()
-
-    _do_generate_ad_video(db, ad, resolution, script_data_override=final_script)
+    logger.info(f"Starting video generation for ad {ad_id} (script score={ad.review_score})")
+    _do_generate_ad_video(db, ad, resolution)
 
 
 def _do_generate_ad_video(db, ad: ProductAd, resolution: str = "720p", script_data_override: dict = None):
@@ -682,37 +853,39 @@ def _do_generate_ad_video(db, ad: ProductAd, resolution: str = "720p", script_da
 
     SEGMENT_DURATION = 15
 
-    image_desc_snippet = ""
-    if isinstance(script_data, dict):
-        raw_desc = script_data.get("image_description", "")
-        if raw_desc:
-            image_desc_snippet = raw_desc[:500]
-
-    ref_instruction = (
-        "CRITICAL: The generated video MUST strictly match the reference images. "
-        "The product's appearance, color, shape, texture, material, logo, and all visible details "
-        "in the video must be identical to the uploaded reference photos. "
-        "The brand logo/trademark visible in the reference images MUST appear on the product "
-        "at the exact same position. Do NOT alter or reimagine the product. "
+    # 紧凑 prompt（参考图已承载产品外观细节，文本聚焦运镜/动作/合规约束）
+    constraint = (
+        "带货短视频：模特身穿参考图商品，面部通用无明星特征，每镜模特必须出镜。"
     )
+    if visual_style == "realistic":
+        suffix = "真人实拍，自然柔光，时尚摄影质感。"
+    else:
+        suffix = "二维动漫风格，色彩鲜明，流畅动画。"
 
-    style_prefix = (
-        ref_instruction + "Cinematic product showcase video, professional model, multi-angle shoot, natural lighting, high quality, 4K, fashion photography style. "
-    ) if visual_style == "realistic" else (
-        ref_instruction + "2D anime fashion showcase, smooth animation, vibrant colors. "
-    )
-
-    if image_desc_snippet:
-        style_prefix += f"Product appearance: {image_desc_snippet}. "
-
-    scene_descs = []
+    # 场景 → 紧凑运镜序列（每镜取景别+首句动作，→ 连接形成流畅视觉流）
+    flow_parts = []
     for s in scenes:
-        angle = s.get("camera_angle", "")
-        action = s.get("action", "")
-        focus = s.get("product_focus", "")
-        parts = [p for p in [angle, action, focus] if p]
-        scene_descs.append(f"Scene {s.get('scene', '?')}: " + ", ".join(parts))
-    combined_prompt = (style_prefix + ". ".join(scene_descs))[:2000]
+        angle = (s.get("camera_angle", "") or "").split("，")[0].strip()
+        action = (s.get("action", "") or "").split("。")[0].strip()
+        if len(action) > 60:
+            action = action[:60]
+        part = f"{angle}，{action}" if angle and action else (angle or action)
+        flow_parts.append(part)
+    flow_text = " → ".join(flow_parts)
+
+    combined_prompt = f"{constraint}{flow_text}。{suffix}"
+    if len(combined_prompt) > 500:
+        # 超长则逐镜缩短动作描述
+        flow_parts = []
+        for s in scenes:
+            angle = (s.get("camera_angle", "") or "").split("，")[0].strip()[:20]
+            action = (s.get("action", "") or "").split("。")[0].strip()[:30]
+            part = f"{angle}，{action}" if angle and action else (angle or action)
+            flow_parts.append(part)
+        flow_text = " → ".join(flow_parts)
+        combined_prompt = f"{constraint}{flow_text}。{suffix}"
+        if len(combined_prompt) > 500:
+            combined_prompt = combined_prompt[:500]
 
     try:
         task = seedance_client.create_video_task(
