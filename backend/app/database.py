@@ -64,6 +64,7 @@ def _run_lightweight_migrations() -> None:
     _add_column_if_missing("product_ads", "script_confirmed", "script_confirmed BOOLEAN DEFAULT 0")
     _add_column_if_missing("product_ads", "script_user_feedback", "script_user_feedback TEXT")
     _add_column_if_missing("product_ads", "review_detail", "review_detail TEXT")
+    _add_column_if_missing("product_ads", "script_variants", "script_variants TEXT")
 
     # novels: 兼容旧表
     _add_column_if_missing("novels", "error_message", "error_message TEXT")

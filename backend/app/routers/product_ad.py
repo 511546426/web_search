@@ -22,6 +22,7 @@ from app.schemas import (
     ProductInfoRequest, ProductAdScriptResponse,
     CompositePreviewResponse, CompositePreviewItem,
     CompositeConfirmRequest, ScriptRetryRequest,
+    ConfirmVariantRequest,
 )
 
 logger = logging.getLogger("product_ad")
@@ -80,16 +81,16 @@ CAMERA_STYLE_POOL = [
 ]
 
 OPENING_HOOK_POOL = [
-    ("产品动态入场：模特从画面外走进或转身面向镜头，第一帧就有动态",
-     "dynamic_entrance"),
-    ("细节冲击：开场即是产品的关键细节特写（面料纹理/刺绣/拉链），然后快速拉远揭示全貌",
+    ("产品动态冲击：第一帧就是产品材质的动态瞬间——拉扯面料回弹/按压凹陷恢复/揉搓后抚平，让用户先看到产品最impressive的特性",
+     "product_impact"),
+    ("细节揭示：开场即产品核心卖点的微距特写（面料经纬纹理/缝线走针/刺绣细节），0.3秒内快速拉远揭示全貌",
      "detail_reveal"),
-    ("光影反差：利用侧光或逆光勾勒产品轮廓，用光影本身作为视觉钩子",
-     "lighting_contrast"),
-    ("上身即变：模特从侧身/背面快速转身正面展示，转身瞬间作为开场冲击",
-     "turn_reveal"),
-    ("场景交互：模特与场景中的物体互动（推开玻璃门/拿起咖啡杯/拨开绿植），用动作吸引注意",
-     "scene_interaction"),
+    ("对比反差：两个不同状态的产品并置或快速切换（揉皱vs平整/暗光vs光照/正面vs侧面），用对比本身制造视觉冲击",
+     "contrast_hook"),
+    ("面料质感特写：开场即面料在手指间揉捏/拉伸/飘动的微距慢动作，触感可视化",
+     "fabric_texture"),
+    ("逆光轮廓冲击：模特侧身/3/4角度，逆光勾勒产品轮廓线条，第一帧用光影剪影吸引视线，0.3秒内转为正常曝光展示产品",
+     "silhouette_reveal"),
 ]
 
 
@@ -113,9 +114,10 @@ def _get_category_strategy(category: str) -> str:
     if any(kw in c for kw in ["服装", "穿搭", "t恤", "套装", "polo", "衬衫", "裤", "裙", "外套", "卫衣", "毛衣", "夹克"]):
         return """【品类策略：服装/穿搭】
 - 展示顺序：整体版型 → 动态垂坠 → 面料质感 → 细节工艺 → 搭配效果
-- 关键时刻：模特转身时面料飘动的瞬间、坐下/弯腰时衣服自然褶皱与恢复
-- 必展示：肩线剪裁、领口车线、下摆垂感、袖口设计
-- 避免：全程静态站立——必须包含行走/转身/坐下/抬手等动态"""
+- 关键时刻：面料回弹瞬间、抗皱恢复、动态垂坠的飘动感、领口贴合度
+- 卖点分配参考：版型轮廓 → 面料回弹/抗皱 → 缝线/纽扣工艺 → 上身穿搭效果
+- 模特动作必须以「展示卖点」为目的：如拉扯面料展示回弹、揉搓袖口展示抗皱、转身展示背部剪裁
+- 注意：禁止为了动作而动作，每个动作必须对应一个 product_focus"""
 
     if any(kw in c for kw in ["美妆", "护肤", "化妆", "口红", "粉底", "精华", "面霜", "眼影"]):
         return """【品类策略：美妆/护肤】
@@ -415,39 +417,51 @@ def confirm_composite(ad_id: int, body: CompositeConfirmRequest, db: Session = D
 # 生成带货剧本（步骤 2）
 # ==============================================================
 
-def _generate_ad_script(product: ProductInfoRequest, user_feedback: str = "") -> dict:
-    """生成带货剧本（可接受用户补充要求）。"""
+def _generate_ad_script(product: ProductInfoRequest, user_feedback: str = "",
+                         image_description: str = None,
+                         creative_params: dict = None) -> dict:
+    """生成带货剧本（可接受用户补充要求）。
+
+    Args:
+        image_description: 预先计算的图片分析结果（多版本生成时共享），为 None 时自动计算
+        creative_params: 指定创意参数（视觉展示模式下覆盖随机选择）
+    """
     from app.services.deepseek_client import chat_json
     from app.services.doubao_vision_client import analyze_product_images
 
-    # 使用合成后的照片（如果有）进行视觉分析
-    image_paths = []
-    for pid in product.photo_ids:
-        if not pid:
-            continue
-        img_path = os.path.join(PRODUCT_PHOTO_DIR, pid)
-        if os.path.exists(img_path):
-            image_paths.append(img_path)
-
-    image_description = ""
-    if image_paths:
-        try:
-            image_description = analyze_product_images(
-                image_paths=image_paths,
-                product_name=product.name,
-                product_category=product.category,
-            )
-            logger.info(f"Doubao vision analysis done, desc length: {len(image_description)}")
-        except Exception as e:
-            logger.exception(f"Doubao vision analysis failed: {e}")
-            image_description = f"（图片分析失败: {e}，请根据商品信息生成剧本）"
+    # 图片分析（支持共享）
+    if image_description is None:
+        image_paths = []
+        for pid in product.photo_ids:
+            if not pid:
+                continue
+            img_path = os.path.join(PRODUCT_PHOTO_DIR, pid)
+            if os.path.exists(img_path):
+                image_paths.append(img_path)
+        image_description = ""
+        if image_paths:
+            try:
+                image_description = analyze_product_images(
+                    image_paths=image_paths,
+                    product_name=product.name,
+                    product_category=product.category,
+                )
+                logger.info(f"Doubao vision analysis done, desc length: {len(image_description)}")
+            except Exception as e:
+                logger.exception(f"Doubao vision analysis failed: {e}")
+                image_description = f"（图片分析失败: {e}，请根据商品信息生成剧本）"
+    else:
+        image_paths = [os.path.join(PRODUCT_PHOTO_DIR, pid) for pid in product.photo_ids if pid and os.path.exists(os.path.join(PRODUCT_PHOTO_DIR, pid))]
+        if not image_paths:
+            image_paths = []
 
     visual_style_text = "真人实景拍摄，真人出镜或产品实拍展示" if product.visual_style == "realistic" else "动漫风格，二维动画展示产品"
     style_note = "写实、真实产品展示" if product.visual_style == "realistic" else "二次元动漫风格"
 
-    creative_params = None
+    creative_params = creative_params or None
     if product.showcase_style == "visual":
-        creative_params = _pick_random()
+        if creative_params is None:
+            creative_params = _pick_random()
         logger.info(f"Creative params: location={creative_params['location'][:40]}..., "
                     f"lighting={creative_params['lighting'][:30]}..., "
                     f"camera={creative_params['camera_style'][:30]}..., "
@@ -508,6 +522,121 @@ Return ONLY the JSON."""
     return result
 
 
+def _generate_ad_script_variants(product: ProductInfoRequest, num_variants: int,
+                                  user_feedback: str = "", image_description: str = None) -> list:
+    """并行生成多个剧本变体，共享一次图片分析。
+
+    每个变体使用不同的随机创意参数（视觉展示模式下），
+    独立经过 auto-review 评审。
+    """
+    # 首次调用时计算图片分析，后续共享
+    from app.services.deepseek_client import chat_json
+    from app.services.doubao_vision_client import analyze_product_images
+
+    if image_description is None:
+        image_paths = []
+        for pid in product.photo_ids:
+            if not pid:
+                continue
+            img_path = os.path.join(PRODUCT_PHOTO_DIR, pid)
+            if os.path.exists(img_path):
+                image_paths.append(img_path)
+        image_description = ""
+        if image_paths:
+            try:
+                image_description = analyze_product_images(
+                    image_paths=image_paths,
+                    product_name=product.name,
+                    product_category=product.category,
+                )
+                logger.info(f"Doubao vision analysis (shared) done, desc length: {len(image_description)}")
+            except Exception as e:
+                logger.exception(f"Doubao vision analysis failed: {e}")
+                image_description = f"（图片分析失败: {e}，请根据商品信息生成剧本）"
+
+    # 为每个变体分配一个"变体描述"：展示风格/创意参数的简短标识
+    variant_labels = []
+    for i in range(num_variants):
+        label = f"方案{i+1}"
+        if product.showcase_style == "visual":
+            cp = _pick_random()
+            label += f" · {cp['opening_hook'][:12]}..."
+        if product.style_preference:
+            short = product.style_preference.split("：")[0] if "：" in product.style_preference else product.style_preference[:8]
+            label += f" · {short}"
+        variant_labels.append(label)
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _gen_one(idx):
+        from app.services.script_writer import auto_review_loop, auto_review_loop_visual
+        cp = _pick_random() if product.showcase_style == "visual" else None
+        script = _generate_ad_script(
+            product, user_feedback=user_feedback,
+            image_description=image_description,
+            creative_params=cp,
+        )
+        # 独立评审
+        try:
+            showcase = script.get("showcase_style", "story")
+            if showcase == "visual":
+                loop_result = auto_review_loop_visual(script)
+            else:
+                loop_result = auto_review_loop(script)
+            script = loop_result["script"]
+            script["_review"] = loop_result["review"]
+            script["_review_score"] = loop_result["review"].get("overall_score")
+        except Exception:
+            logger.exception(f"Variant {idx} auto review failed")
+            script["_review"] = None
+            script["_review_score"] = None
+        script["_variant_label"] = variant_labels[idx]
+        script["_variant_index"] = idx
+        return script
+
+    with ThreadPoolExecutor(max_workers=min(num_variants, 3)) as ex:
+        futures = [ex.submit(_gen_one, i) for i in range(num_variants)]
+        variants = []
+        for f in as_completed(futures):
+            variants.append(f.result())
+    # 按 index 排序保持顺序
+    variants.sort(key=lambda v: v.get("_variant_index", 0))
+    logger.info(f"Generated {len(variants)} script variants")
+    return variants, variant_labels
+
+
+def _build_dimension_feedback_prompt(improve_dimensions: list, current_dimension_scores: dict = None) -> str:
+    """将用户勾选的改进维度转换为结构化提示词片段."""
+    if not improve_dimensions:
+        return ""
+    dim_prompts = {
+        "hook_strength": "开场吸引力：请重构第一镜，使其在 0.5 秒内抓住注意力——动态入场/细节冲击/光影反差/对比转身四选一",
+        "info_density": "信息密度：每镜必须传递至少 2 个产品信息点（外观+质感、版型+垂坠、细节+工艺等组合）",
+        "product_persuasion": "产品说服力：卖点通过画面本身传递而非文字，让用户看完产生「想要」的冲动",
+        "visual_diversity": "视觉多样性：景别/角度/运镜必须有明显交替，打破模板感，远中近特交替使用",
+        "scene_flow": "场景衔接：相邻镜头动作/视线/运镜方向必须自然衔接，避免跳跃感",
+        "ai_executability": "AI 可执行性：所有视觉描述具体到 Seedance 可直接理解，避免抽象概念",
+        "story_completeness": "故事完整性：起承转合完整，前 3 秒有钩子，全程有推动力",
+        "character_depth": "角色深度：角色有辨识度和记忆点，台词有个性",
+        "scene_logic": "场景逻辑：场景衔接自然，情绪递进合理，因果关系清晰",
+        "visual_feasibility": "视觉可行性：所有描述必须 AI 可生成，具体可执行",
+        "dialogue_quality": "对白质量：口语化自然，有个性有记忆点",
+        "pacing": "节奏把控：快慢得当，全程不拖沓",
+    }
+    result = "\n===== 用户指定的改进维度 =====\n"
+    for dim in improve_dimensions:
+        prompt_text = dim_prompts.get(dim, f"改进维度: {dim}")
+        score_text = ""
+        if current_dimension_scores and dim in current_dimension_scores:
+            s = current_dimension_scores[dim]
+            if isinstance(s, dict):
+                s = s.get("score", "?")
+            score_text = f"（当前评分: {s}）"
+        result += f"- **{prompt_text}** {score_text}\n"
+    result += "\n请优先针对以上维度进行优化，每条 criticized 点必须在修改中体现。\n=====\n"
+    return result
+
+
 def _build_visual_system_prompt(product, style_note, creative_params=None):
     if creative_params is None:
         creative_params = _pick_random()
@@ -529,11 +658,40 @@ def _build_visual_system_prompt(product, style_note, creative_params=None):
 
 {category_strategy}
 
-## 视觉叙事体系
-- 抛弃传统的 Establishing → Detail → Motion → Lifestyle → Climax 模板
-- 15 秒内完成一次「看→想买」的心理旅程
-- 总镜头数 5~7 个，每个镜头 1.5~3 秒
-- **第一镜必须是钩子**：按照上述指定开场方式，第一帧就要有信息量，用户在前 3 秒不能划走
+## ⚠️ 铁律 — 场景服务于产品使用场景，不是风景片
+- 指定的拍摄场景是产品**使用场景**的载体，不是"找个好看的背景走秀"
+- 场景的氛围/光线/布局必须让用户想象自己**在使用这个产品时的状态**
+- 例如衬衫：办公室场景凸显版型正式 → 休闲场景凸显百搭 → 居家场景凸显舒适
+- **如果指定的背景是纯风景（天台/海边/画廊），请主动赋予它一个产品使用场景的理由**（如"在天台参加朋友聚会时穿的衬衫"）
+
+## 场景叙事框架（每镜必须有明确的"卖点任务"）
+15 秒内完成「吸引 → 信任 → 欲望 → 行动」的心理旅程。
+每个场景只能承担 1 个核心任务，禁止重复：
+
+| 场景 | 任务 | 说明 |
+|------|------|------|
+| **第 1 镜** | **钩子 — 第一帧抓人** | 不是"模特开始走路"！必须是产品本身的视觉冲击——面料回弹/版型对比/质感特写/动态瞬间。0.5 秒内让用户舍不得划走 |
+| **第 2~3 镜** | **信任 — 证明品质** | 具体卖点验证：抗皱测试/透气感/缝线细节/面料拉伸。用户看完觉得"做工不错" |
+| **第 4~5 镜** | **欲望 — 上身效果** | 完整版型展示，动态垂坠感，整体穿搭效果。让用户想象"我穿上也是这样" |
+| **第 6~7 镜** | **场景共鸣或收尾** | 穿着场景融入（商务/约会/日常），或 CTA。让用户觉得"我需要一件这样的" |
+
+注意：如果只有 5 镜，合并第 6~7 镜的任务到第 4~5 镜中。
+
+## 卖点差异化 — 相邻场景禁止重复展示同一卖点
+- 每个场景的 product_focus 必须是**不同**的卖点维度
+- 反例：场景 1 讲面料纹理 → 场景 2 还讲面料纹理 ❌
+- 正例：场景 1 讲版型轮廓 → 场景 2 讲面料回弹 → 场景 3 讲缝线工艺 ✓
+- 最后一个场景的 product_focus 必须概括整体上身效果（不重复具体细节卖点）
+
+## 第一镜要求（完播率生死线）
+- **禁止**：模特从远处走来、模特侧身站立、背影开场、空镜头
+- **必须**：第一帧就是产品的高信息量画面——面料动态特写/版型对比/产品回弹/细节冲击
+- 开场方式 '{opening_hook}' 必须被实现，但不能牺牲产品信息的传达
+
+## 删除所有"过渡性动作"
+- 删除：行走、转身、坐下、起身、整理衣服、走向某处、手搭在某处
+- 除非这些动作本身在展示产品卖点（如"转身时面料飘动展示垂坠感"可以保留，但"模特转身走向天台边缘"必须删除）
+- 每个镜头的 action 必须直接服务于该镜的 product_focus
 
 ## 镜头多样性格要求（极其重要，对抗模板化）
 - 景别必须多样化：远中近特必须交替使用，禁止连续 3 个以上同景别
@@ -618,31 +776,51 @@ def _build_story_system_prompt(product, style_note):
 
 @router.post("/generate-script", status_code=201)
 def generate_ad_script(body: ProductInfoRequest, db: Session = Depends(get_db)):
-    """生成带货剧本。
+    """生成带货剧本（支持多版本对比）。
 
+    如果 num_variants > 1，并行生成多个变体供用户对比选择（recommended: 3）。
     如果已存在同商品草稿（ad_id 可选），则更新而非新建。
-    如果 body 中带 ad_id，则复用已有的 ProductAd 记录。
     """
     if not body.name and not body.description:
         raise HTTPException(status_code=400, detail="请提供商品名称或描述")
 
-    script_data = _generate_ad_script(body)
+    num_variants = max(1, min(body.num_variants or 1, 3))
 
-    # 自动评审（无论新建还是更新，都先评审再入库）
-    from app.services.script_writer import auto_review_loop, auto_review_loop_visual
-    review_score = None
-    review_detail = None
-    try:
-        showcase = script_data.get("showcase_style", "story")
-        if showcase == "visual":
-            loop_result = auto_review_loop_visual(script_data)
-        else:
-            loop_result = auto_review_loop(script_data)
-        script_data = loop_result["script"]
-        review_score = loop_result["review"].get("overall_score")
-        review_detail = json.dumps(loop_result["review"], ensure_ascii=False)
-    except Exception:
-        logger.exception("Auto review failed, using raw script")
+    if num_variants > 1:
+        # 多版本生成：并行生成 + 独立评审
+        variants, labels = _generate_ad_script_variants(body, num_variants)
+        script_data = variants[0]  # 默认选第一个
+        review_data = script_data.get("_review") or {}
+        review_score = review_data.get("overall_score")
+        review_detail = json.dumps(review_data, ensure_ascii=False) if review_data else None
+        # 序列化所有变体（去掉 _review 中的冗余大字段以节省空间）
+        serializable_variants = []
+        for v in variants:
+            sv = {k: v for k, v in v.items() if not k.startswith("_")}
+            sv["_review_score"] = v.get("_review_score")
+            if v.get("_review"):
+                sv["_review"] = v["_review"]
+            sv["_variant_label"] = v.get("_variant_label")
+            sv["_variant_index"] = v.get("_variant_index")
+            serializable_variants.append(sv)
+    else:
+        # 单版本模式（原逻辑）
+        from app.services.script_writer import auto_review_loop, auto_review_loop_visual
+        script_data = _generate_ad_script(body)
+        try:
+            showcase = script_data.get("showcase_style", "story")
+            if showcase == "visual":
+                loop_result = auto_review_loop_visual(script_data)
+            else:
+                loop_result = auto_review_loop(script_data)
+            script_data = loop_result["script"]
+            review_score = loop_result["review"].get("overall_score")
+            review_detail = json.dumps(loop_result["review"], ensure_ascii=False)
+        except Exception:
+            logger.exception("Auto review failed, using raw script")
+            review_score = None
+            review_detail = None
+        serializable_variants = None
 
     # 检查是否有 ad_id 参数（复用已有草稿）
     ad_id = getattr(body, "ad_id", None)
@@ -653,6 +831,7 @@ def generate_ad_script(body: ProductInfoRequest, db: Session = Depends(get_db)):
             ad.product_info = json.dumps(body.model_dump(), ensure_ascii=False)
             ad.photo_ids = json.dumps(body.photo_ids, ensure_ascii=False)
             ad.script_content = json.dumps(script_data, ensure_ascii=False)
+            ad.script_variants = json.dumps(serializable_variants, ensure_ascii=False) if serializable_variants else None
             ad.genre = script_data.get("genre", "带货")
             ad.status = "draft"
             ad.tags = ",".join(script_data.get("tags", [])) if isinstance(script_data.get("tags"), list) else "带货"
@@ -661,7 +840,7 @@ def generate_ad_script(body: ProductInfoRequest, db: Session = Depends(get_db)):
             ad.review_detail = review_detail
             db.commit()
             db.refresh(ad)
-            logger.info(f"Ad script updated (existing): id={ad.id}, score={review_score}")
+            logger.info(f"Ad script updated (existing): id={ad.id}, variants={num_variants}, score={review_score}")
             return ad
 
     ad = ProductAd(
@@ -669,6 +848,7 @@ def generate_ad_script(body: ProductInfoRequest, db: Session = Depends(get_db)):
         product_info=json.dumps(body.model_dump(), ensure_ascii=False),
         photo_ids=json.dumps(body.photo_ids, ensure_ascii=False),
         script_content=json.dumps(script_data, ensure_ascii=False),
+        script_variants=json.dumps(serializable_variants, ensure_ascii=False) if serializable_variants else None,
         genre=script_data.get("genre", "带货"),
         status="draft",
         tags=",".join(script_data.get("tags", [])) if isinstance(script_data.get("tags"), list) else "带货",
@@ -678,21 +858,42 @@ def generate_ad_script(body: ProductInfoRequest, db: Session = Depends(get_db)):
     db.add(ad)
     db.commit()
     db.refresh(ad)
-    logger.info(f"Ad script created: id={ad.id}, title={ad.title}, score={review_score}")
+    logger.info(f"Ad script created: id={ad.id}, title={ad.title}, variants={num_variants}, score={review_score}")
     return ad
 
 
 @router.post("/{ad_id}/retry-script")
 def retry_ad_script(ad_id: int, body: ScriptRetryRequest = None, db: Session = Depends(get_db)):
-    """根据用户反馈重新生成带货剧本。"""
+    """根据用户反馈重新生成带货剧本（支持结构化维度反馈）。"""
     from app.services.deepseek_client import chat_json
 
     ad = db.query(ProductAd).filter(ProductAd.id == ad_id).first()
     if not ad:
         raise HTTPException(status_code=404, detail="带货剧本不存在")
 
-    feedback = (body or ScriptRetryRequest(ad_id=ad_id)).feedback or ""
-    ad.script_user_feedback = feedback
+    req_body = body or ScriptRetryRequest(ad_id=ad_id)
+    feedback = req_body.feedback or ""
+    improve_dims = req_body.improve_dimensions or []
+
+    # 构建结构化维度反馈
+    structured_prompt = ""
+    if improve_dims:
+        # 读取当前剧本的评审数据，获取各维度当前分数
+        current_dims = {}
+        if ad.review_detail:
+            try:
+                rd = json.loads(ad.review_detail) if isinstance(ad.review_detail, str) else ad.review_detail
+                current_dims = rd.get("dimensions", {})
+            except Exception:
+                pass
+        structured_prompt = _build_dimension_feedback_prompt(improve_dims, current_dims)
+        logger.info(f"Structured feedback for ad {ad_id}: dimensions={improve_dims}")
+
+    # 合并反馈：结构化维度反馈在前，自由文本在后
+    combined_feedback = structured_prompt
+    if feedback:
+        combined_feedback += f"\n===== 用户补充要求 =====\n\n{feedback}\n=====\n"
+    ad.script_user_feedback = combined_feedback
     db.commit()
 
     # 重新调用 DeepSeek 生成
@@ -718,7 +919,7 @@ def retry_ad_script(ad_id: int, body: ScriptRetryRequest = None, db: Session = D
         visual_style=product_info.get("visual_style", "realistic"),
         showcase_style=product_info.get("showcase_style", "story"),
     )
-    script_data = _generate_ad_script(req, user_feedback=feedback)
+    script_data = _generate_ad_script(req, user_feedback=combined_feedback)
 
     # 重新评审
     try:
@@ -753,6 +954,41 @@ def confirm_ad_script(ad_id: int, db: Session = Depends(get_db)):
     db.commit()
     logger.info(f"Script confirmed for ad {ad_id}")
     return {"message": "剧本已确认", "ad_id": ad_id}
+
+
+@router.post("/{ad_id}/confirm-variant")
+def confirm_ad_variant(ad_id: int, body: ConfirmVariantRequest, db: Session = Depends(get_db)):
+    """用户选择某个变体并确认（多版本对比模式）。"""
+    ad = db.query(ProductAd).filter(ProductAd.id == ad_id).first()
+    if not ad:
+        raise HTTPException(status_code=404, detail="带货草稿不存在")
+
+    variants_json = ad.script_variants
+    if not variants_json:
+        raise HTTPException(status_code=400, detail="草稿没有多版本数据，请直接使用确认剧本")
+
+    variants = json.loads(variants_json) if isinstance(variants_json, str) else variants_json
+    if not variants or body.variant_index < 0 or body.variant_index >= len(variants):
+        raise HTTPException(status_code=400, detail=f"无效的变体索引: {body.variant_index}，可用范围: 0-{len(variants)-1}")
+
+    chosen = variants[body.variant_index]
+    chosen_review = chosen.get("_review") or {}
+
+    ad.script_content = json.dumps(chosen, ensure_ascii=False)
+    ad.review_score = chosen.get("_review_score") or chosen_review.get("overall_score")
+    ad.review_detail = json.dumps(chosen_review, ensure_ascii=False)
+    ad.script_confirmed = True
+    ad.title = chosen.get("title", ad.title or "商品带货视频")
+    db.commit()
+    db.refresh(ad)
+
+    logger.info(f"Variant {body.variant_index} confirmed for ad {ad_id}, score={ad.review_score}")
+    return {
+        "message": f"已选择方案{body.variant_index + 1}并确认剧本",
+        "ad_id": ad_id,
+        "variant_index": body.variant_index,
+        "review_score": ad.review_score,
+    }
 
 
 # ==============================================================
@@ -873,19 +1109,27 @@ def _do_generate_ad_video(db, ad: ProductAd, resolution: str = "720p", script_da
         flow_parts.append(part)
     flow_text = " → ".join(flow_parts)
 
-    combined_prompt = f"{constraint}{flow_text}。{suffix}"
-    if len(combined_prompt) > 500:
-        # 超长则逐镜缩短动作描述
-        flow_parts = []
-        for s in scenes:
-            angle = (s.get("camera_angle", "") or "").split("，")[0].strip()[:20]
-            action = (s.get("action", "") or "").split("。")[0].strip()[:30]
-            part = f"{angle}，{action}" if angle and action else (angle or action)
-            flow_parts.append(part)
-        flow_text = " → ".join(flow_parts)
+    # 追加背景音乐要求（剧本生成的 background_music 描述了风格/节奏/氛围）
+    bgm = ""
+    if isinstance(script_data, dict) and script_data.get("background_music"):
+        bgm_text = script_data["background_music"]
+        bgm = f"背景音乐：{bgm_text[:80]}。"
+    combined_prompt = f"{constraint}{flow_text}。{suffix}{bgm}"
+    if len(combined_prompt) > 800:
+        # 超长则先砍 bgm
         combined_prompt = f"{constraint}{flow_text}。{suffix}"
-        if len(combined_prompt) > 500:
-            combined_prompt = combined_prompt[:500]
+        if len(combined_prompt) > 800:
+            # 再超长则逐镜缩短动作描述
+            flow_parts = []
+            for s in scenes:
+                angle = (s.get("camera_angle", "") or "").split("，")[0].strip()[:20]
+                action = (s.get("action", "") or "").split("。")[0].strip()[:30]
+                part = f"{angle}，{action}" if angle and action else (angle or action)
+                flow_parts.append(part)
+            flow_text = " → ".join(flow_parts)
+            combined_prompt = f"{constraint}{flow_text}。{suffix}"
+            if len(combined_prompt) > 800:
+                combined_prompt = combined_prompt[:800]
 
     try:
         task = seedance_client.create_video_task(

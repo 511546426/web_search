@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>漫剧管理面板</title>
-<link rel="stylesheet" href="/css/comic-admin.css?v=20260511-10">
+<link rel="stylesheet" href="/css/comic-admin.css?v=20260518-2">
 </head>
 <body>
 <div class="app">
@@ -177,6 +177,9 @@
           <h3>带货剧本预览</h3>
           <span id="scriptStatusBadge" style="font-size:0.82rem;color:var(--text-tertiary);">待生成</span>
         </div>
+        <!-- 多版本变体选择器 -->
+        <div class="variant-selector" id="variantSelector" style="display:none;"></div>
+
         <!-- 剧本卡片（JSON 可视化） -->
         <div class="script-preview-card" id="scriptPreviewArea" style="display:none;">
           <div class="script-meta" id="scriptMeta"></div>
@@ -262,16 +265,18 @@
     </div>
   </div>
 
-  <!-- 剧本重试弹窗 -->
+  <!-- 剧本重试弹窗（结构化反馈） -->
   <div class="modal-overlay" id="retryScriptModal">
-    <div class="modal" style="max-width:500px;">
+    <div class="modal" style="max-width:520px;">
       <div class="modal-header">
         <h2>重新生成剧本</h2>
         <button class="modal-close" onclick="$('#retryScriptModal').classList.remove('active')">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="margin-bottom:12px;">对当前剧本不满意？可以提补充要求，AI 会据此优化：</p>
-        <textarea id="scriptFeedbackInput" placeholder="例如：增加2个商标特写镜头、第一个场景放在户外街拍、强化产品功能展示..." style="width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:rgba(0,0,0,0.3);color:var(--text-primary);font-family:inherit;resize:vertical;"></textarea>
+        <p style="margin-bottom:12px;font-size:0.85rem;">选择需要改进的维度，AI 会针对性优化：</p>
+        <div id="retryDimChecklist" style="margin-bottom:16px;"></div>
+        <p style="margin-bottom:8px;font-size:0.82rem;color:var(--text-tertiary);">或补充具体要求（可选）：</p>
+        <textarea id="scriptFeedbackInput" placeholder="例如：增加2个商标特写、第一个场景放户外的感觉、强化产品功能展示..." style="width:100%;min-height:80px;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:rgba(0,0,0,0.3);color:var(--text-primary);font-family:inherit;resize:vertical;"></textarea>
       </div>
       <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn btn-outline" onclick="$('#retryScriptModal').classList.remove('active')">取消</button>
@@ -321,6 +326,6 @@
   </div>
 </div>
 
-<script src="/js/comic-admin.js?v=20260516-2"></script>
+<script src="/js/comic-admin.js?v=20260518-2"></script>
 </body>
 </html>

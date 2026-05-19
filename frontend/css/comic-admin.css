@@ -1222,6 +1222,108 @@ header h1 {
   color: var(--blue);
 }
 
+/* ── Variant Selector (多版本对比) ── */
+.variant-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.variant-tab {
+  flex: 1;
+  min-width: 160px;
+  padding: 12px 14px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.25s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.variant-tab:hover {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: var(--bg-glass-hover);
+}
+
+.variant-tab-active {
+  border-color: var(--gold);
+  background: rgba(245, 158, 11, 0.08);
+  box-shadow: 0 0 12px rgba(217, 119, 6, 0.15);
+}
+
+.variant-tab-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.variant-tab-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Dimension Checklist (结构化反馈) ── */
+.dim-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.2s;
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 6px;
+}
+
+.dim-checkbox-label:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--border-default);
+}
+
+.dim-checkbox {
+  margin-top: 4px;
+  accent-color: var(--gold);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.dim-checkbox-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  flex: 1;
+}
+
+.dim-checkbox-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dim-checkbox-score {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 8px;
+}
+
+.dim-checkbox-score.high { color: var(--green); background: var(--green-bg); }
+.dim-checkbox-score.mid { color: var(--gold); background: var(--amber-bg); }
+.dim-checkbox-score.low { color: var(--red); background: var(--red-bg); }
+
+.dim-checkbox-desc {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  width: 100%;
+}
+
 /* ── Scene Cards ── */
 .scene-card {
   background: rgba(0, 0, 0, 0.2);

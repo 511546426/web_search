@@ -44,6 +44,11 @@ let currentAdId = null;        // 当前步骤流程的 ad_id
 let currentStep = 1;           // 1-4
 let pollTimer = null;
 
+// ---- 多版本剧本状态 ----
+let _scriptVariants = null;    // 剧本变体数组（多版本生成时使用）
+let _selectedVariantIndex = 0; // 当前选中的变体索引
+let _currentAdData = null;     // 缓存当前 ad 数据，用于变体切换时重渲染
+
 // ---- 步骤状态常量 ----
 const STEPS = { UPLOAD: 1, COMPOSITE: 2, SCRIPT: 3, VIDEO: 4 };
 
@@ -621,6 +626,9 @@ async function continueProductAd(id) {
     const ad = await api(API + '/product-ad/' + id);
     _lastFetchedAd = ad;
     currentAdId = id;
+    // 强制重新解析 script_variants，避免使用前一个广告的陈旧缓存
+    _scriptVariants = null;
+    _selectedVariantIndex = 0;
     uploadedPhotoIds = JSON.parse(ad.photo_ids || '[]');
     // 填充表单
     if (ad.product_info) {
@@ -1055,6 +1063,7 @@ async function runScriptGeneration() {
     const draft = await api(API + '/product-ad/' + currentAdId);
     const info = JSON.parse(draft.product_info || '{}');
 
+    // 多版本生成：请求 3 个变体
     const res = await api(API + '/product-ad/generate-script', {
       method: 'POST',
       body: JSON.stringify({
@@ -1067,9 +1076,19 @@ async function runScriptGeneration() {
         photo_ids: uploadedPhotoIds,
         visual_style: info.visual_style || 'realistic',
         showcase_style: info.showcase_style || 'story',
-        ad_id: currentAdId,  // 复用已有草稿
+        num_variants: 3,  // 多版本对比
+        ad_id: currentAdId,
       })
     });
+
+    // 解析多版本数据
+    _scriptVariants = null;
+    if (res.script_variants) {
+      try { _scriptVariants = JSON.parse(res.script_variants); } catch {}
+    }
+    _selectedVariantIndex = 0;
+    _currentAdData = res;
+
     renderScriptPreview(res);
     _lastFetchedAd = res;
   } catch (e) {
@@ -1078,23 +1097,107 @@ async function runScriptGeneration() {
   }
 }
 
-function renderScriptPreview(data) {
+function renderScriptPreview(data, variantIndex) {
   $('#scriptLoading').style.display = 'none';
   $('#scriptPreviewArea').style.display = 'block';
   $('#scriptActions').style.display = 'flex';
 
+  // 解析 script_variants（可能来自新生成或历史数据）
+  if (data.script_variants && (!_scriptVariants || _scriptVariants.length <= 1)) {
+    try {
+      const parsed = JSON.parse(data.script_variants);
+      console.log('[DEBUG] parsed script_variants:', parsed?.length, 'items, _scriptVariants was:', _scriptVariants?.length);
+      if (parsed && parsed.length > 1) {
+        _scriptVariants = parsed;
+        _selectedVariantIndex = 0;
+        _currentAdData = data;
+      }
+    } catch (e) { console.warn('[DEBUG] parse script_variants failed:', e); }
+  }
+
+  // 多版本：渲染变体选择器
+  if (_scriptVariants && _scriptVariants.length > 1) {
+    console.log('[DEBUG] rendering variant selector with', _scriptVariants.length, 'variants');
+    renderVariantSelector(_selectedVariantIndex);
+  } else {
+    console.log('[DEBUG] only 1 variant, hiding selector, _scriptVariants:', _scriptVariants?.length, 'data.script_variants:', !!data.script_variants);
+    $('#variantSelector').style.display = 'none';
+  }
+
+  // 渲染当前选中变体的内容
+  _renderSingleVariant(data, variantIndex != null ? variantIndex : _selectedVariantIndex);
+}
+
+function renderVariantSelector(selectedIdx) {
+  const container = $('#variantSelector');
+  container.style.display = 'flex';
+  container.innerHTML = _scriptVariants.map((v, i) => {
+    const score = v._review_score != null ? v._review_score : (v._review && v._review.overall_score);
+    const label = v._variant_label || ('方案' + (i + 1));
+    const scenes = (v.scenes || v.script || []).length;
+    const isSelected = i === selectedIdx;
+    return `
+      <div class="variant-tab ${isSelected ? 'variant-tab-active' : ''}" onclick="selectVariant(${i})">
+        <span class="variant-tab-label">${escHtml(label)}</span>
+        <div class="variant-tab-meta">
+          ${score != null ? `<span class="tag review-score">${score}/10</span>` : ''}
+          <span style="font-size:0.72rem;color:var(--text-tertiary);">${scenes}场</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function selectVariant(idx) {
+  if (idx < 0 || !_scriptVariants || idx >= _scriptVariants.length) return;
+  _selectedVariantIndex = idx;
+
+  // 更新 tabs 高亮
+  const tabs = $('#variantSelector').querySelectorAll('.variant-tab');
+  tabs.forEach((t, i) => t.classList.toggle('variant-tab-active', i === idx));
+
+  // 重新渲染选中变体的内容
+  _renderSingleVariant(_currentAdData, idx);
+  showToast('已切换到方案' + (idx + 1), 'info');
+}
+
+function _renderSingleVariant(data, variantIndex) {
+  // 获取当前变体的脚本数据
   let scriptData;
-  try {
-    scriptData = typeof data.script_content === 'string' ? JSON.parse(data.script_content) : data.script_content;
-  } catch { scriptData = {}; }
+  const useVariant = _scriptVariants && _scriptVariants.length > 1 && _scriptVariants[variantIndex];
+
+  if (useVariant) {
+    scriptData = useVariant;
+  } else {
+    try {
+      scriptData = typeof data.script_content === 'string' ? JSON.parse(data.script_content) : data.script_content;
+    } catch { scriptData = {}; }
+  }
+
+  // 构建适用于当前变体的 review data
+  let variantReviewDetail = null;
+  if (useVariant && useVariant._review) {
+    variantReviewDetail = useVariant._review;
+  }
+  const variantData = useVariant ? {
+    ...data,
+    // 用变体的 review 覆盖顶层 review
+    _override_review: variantReviewDetail,
+    _override_score: useVariant._review_score != null ? useVariant._review_score : (variantReviewDetail ? variantReviewDetail.overall_score : null),
+  } : data;
 
   const scenes = scriptData.scenes || scriptData.script || [];
-  const score = data.review_score !== null && data.review_score !== undefined ? data.review_score : (scriptData.review_score || '—');
+  const score = variantData._override_score != null ? variantData._override_score : (data.review_score !== null && data.review_score !== undefined ? data.review_score : (scriptData.review_score || '—'));
   const showcaseLabel = scriptData.showcase_style === 'visual' ? '视觉展示' : '剧情带货';
+
+  // 左上角显示当前是哪个变体
+  const variantBadge = useVariant
+    ? `<span class="tag" style="background:var(--indigo-bg);color:var(--indigo);">方案${variantIndex + 1}</span>`
+    : '';
 
   // Meta info
   $('#scriptMeta').innerHTML = `
     <div class="script-meta-row">
+      ${variantBadge}
       <span><strong>${escHtml(data.title || scriptData.title || '')}</strong></span>
       <span class="tag">${showcaseLabel}</span>
       ${score !== '—' ? `<span class="tag review-score">评分: ${score}/10</span>` : ''}
@@ -1105,7 +1208,7 @@ function renderScriptPreview(data) {
   `;
 
   // Review detail (dimensions, strengths, weaknesses)
-  renderReviewDetail(data);
+  renderReviewDetail(variantData);
 
   // Reference photos
   let photosForScript = uploadedPhotoIds && uploadedPhotoIds.length ? uploadedPhotoIds : [];
@@ -1144,16 +1247,58 @@ function renderScriptPreview(data) {
   // Raw JSON
   $('#scriptRawContent').textContent = JSON.stringify(scriptData, null, 2);
 
+  // 确认按钮：始终 clone 替换以清除旧的 addEventListener
+  const oldBtn = $('#confirmScriptBtn');
+  oldBtn.replaceWith(oldBtn.cloneNode(true));
+  const newBtn = $('#confirmScriptBtn');
+
+  if (_scriptVariants && _scriptVariants.length > 1) {
+    newBtn.textContent = `选择方案${variantIndex + 1} ✓`;
+    newBtn.onclick = () => confirmSelectedVariant(variantIndex);
+  } else {
+    newBtn.textContent = '确认剧本 ✓';
+    newBtn.onclick = async () => {
+      if (!currentAdId) return;
+      try {
+        await api(API + '/product-ad/' + currentAdId + '/confirm-script', { method: 'POST' });
+        showToast('剧本已确认', 'success');
+        goToStep(STEPS.VIDEO);
+        $('#generateVideoBtn').disabled = false;
+      } catch (e) { showToast('确认失败: ' + e.message, 'error'); }
+    };
+  }
+
   $('#scriptStatusBadge').textContent = '已生成 ✓';
-  showToast('带货剧本已生成', 'success');
+  showToast(`方案${useVariant ? ' ' + (variantIndex + 1) : ''} 加载完成`, 'success');
+}
+
+async function confirmSelectedVariant(variantIndex) {
+  if (!currentAdId || !_scriptVariants) return;
+  try {
+    const res = await api(API + '/product-ad/' + currentAdId + '/confirm-variant', {
+      method: 'POST',
+      body: JSON.stringify({ ad_id: currentAdId, variant_index: variantIndex })
+    });
+    showToast(res.message, 'success');
+    goToStep(STEPS.VIDEO);
+    $('#generateVideoBtn').disabled = false;
+    // 清理多版本状态
+    _scriptVariants = null;
+    _selectedVariantIndex = 0;
+  } catch (e) { showToast('确认失败: ' + e.message, 'error'); }
 }
 
 function renderReviewDetail(data) {
   const el = $('#scriptReviewDetail');
   let review;
-  try {
-    review = typeof data.review_detail === 'string' ? JSON.parse(data.review_detail) : data.review_detail;
-  } catch { review = null; }
+  // 优先使用变体的 _override_review
+  if (data._override_review) {
+    review = data._override_review;
+  } else {
+    try {
+      review = typeof data.review_detail === 'string' ? JSON.parse(data.review_detail) : data.review_detail;
+    } catch { review = null; }
+  }
   if (!review || !review.dimensions) { el.style.display = 'none'; return; }
 
   const dims = review.dimensions;
@@ -1216,26 +1361,95 @@ function toggleRawScript() {
   icon.textContent = isHidden ? '▼' : '▶';
 }
 
-// Confirm script
-$('#confirmScriptBtn').addEventListener('click', async () => {
-  if (!currentAdId) return;
-  try {
-    await api(API + '/product-ad/' + currentAdId + '/confirm-script', { method: 'POST' });
-    showToast('剧本已确认', 'success');
-    goToStep(STEPS.VIDEO);
-    $('#generateVideoBtn').disabled = false;
-  } catch (e) { showToast('确认失败: ' + e.message, 'error'); }
-});
+// Confirm script (click handler 已在 _renderSingleVariant 中动态设置)
+// 移除旧的 addEventListener 避免冲突
 
-// ---- Step 3 retry modal ----
+// ---- Step 3 retry modal (结构化反馈) ----
+const _DIMENSIONS_VISUAL = [
+  { key: 'hook_strength', name: '开场钩子', desc: '第一镜的视觉冲击力，前 3 秒能否抓住用户' },
+  { key: 'info_density', name: '信息密度', desc: '每镜传达的有效产品信息量' },
+  { key: 'product_persuasion', name: '产品说服力', desc: '看完是否有「想要」的冲动' },
+  { key: 'visual_diversity', name: '视觉多样性', desc: '景别/角度/运镜的丰富度' },
+  { key: 'scene_flow', name: '场景衔接', desc: '相邻镜头的连贯性和流畅度' },
+  { key: 'ai_executability', name: 'AI 可执行性', desc: '描述是否具体到 AI 可直接生成' },
+];
+
+const _DIMENSIONS_STORY = [
+  { key: 'story_completeness', name: '故事完整性', desc: '起承转合完整，有钩子有反转' },
+  { key: 'character_depth', name: '角色深度', desc: '角色立体有辨识度' },
+  { key: 'scene_logic', name: '场景逻辑', desc: '场景衔接自然，情绪递进合理' },
+  { key: 'visual_feasibility', name: '视觉可行性', desc: '100% 可 AI 生成' },
+  { key: 'dialogue_quality', name: '对白质量', desc: '口语化自然，有记忆点' },
+  { key: 'pacing', name: '节奏把控', desc: '快慢得当，全程不拖沓' },
+];
+
 function showRetryScriptModal() {
+  // 检查当前是否有 review 数据来确定展示模式
+  const currentData = _lastFetchedAd;
+  let review = null;
+  let showcaseStyle = 'story';
+  if (currentData) {
+    try {
+      review = typeof currentData.review_detail === 'string'
+        ? JSON.parse(currentData.review_detail)
+        : currentData.review_detail;
+    } catch {}
+    // 尝试从剧本内容中获取 showcase 类型
+    try {
+      const sc = typeof currentData.script_content === 'string'
+        ? JSON.parse(currentData.script_content)
+        : currentData.script_content;
+      if (sc && sc.showcase_style) showcaseStyle = sc.showcase_style;
+    } catch {}
+  }
+
+  // 选择对应的维度配置
+  const isVisual = showcaseStyle === 'visual';
+  const dims = isVisual ? _DIMENSIONS_VISUAL : _DIMENSIONS_STORY;
+
+  // 获取当前各维度分数
+  const dimScores = (review && review.dimensions) || {};
+
+  // 渲染维度勾选列表
+  const checklistHtml = dims.map(d => {
+    const scoreObj = dimScores[d.key];
+    const score = scoreObj ? (typeof scoreObj === 'number' ? scoreObj : scoreObj.score) : null;
+    // 低于 6 分的默认勾选
+    const checked = score !== null && score < 6 ? 'checked' : '';
+    const scoreStr = score != null ? score + '/10' : '—';
+    const scoreClass = score != null ? (score >= 8 ? 'high' : score >= 6 ? 'mid' : 'low') : '';
+    return `
+      <label class="dim-checkbox-label">
+        <input type="checkbox" class="dim-checkbox" data-dim="${d.key}" ${checked}>
+        <span class="dim-checkbox-content">
+          <span class="dim-checkbox-name">${d.name}</span>
+          <span class="dim-checkbox-score ${scoreClass}">${scoreStr}</span>
+          <span class="dim-checkbox-desc">${d.desc}</span>
+        </span>
+      </label>`;
+  }).join('');
+
+  $('#retryDimChecklist').innerHTML = checklistHtml;
+  $('#retryDimChecklist').style.display = 'block';
+  $('#scriptFeedbackInput').value = '';
   $('#retryScriptModal').classList.add('active');
 }
 
 $('#doRetryScriptBtn').addEventListener('click', async () => {
   if (!currentAdId) return;
+
+  // 收集勾选的维度
+  const checkedDims = [];
+  document.querySelectorAll('.dim-checkbox:checked').forEach(cb => {
+    checkedDims.push(cb.dataset.dim);
+  });
   const feedback = $('#scriptFeedbackInput').value.trim();
+
   $('#retryScriptModal').classList.remove('active');
+
+  // 重设确认按钮状态（避免多版本模式下的残留 onclick）
+  const confirmBtn = $('#confirmScriptBtn');
+  confirmBtn.onclick = null;
 
   $('#scriptPlaceholder').style.display = 'none';
   $('#scriptLoading').style.display = 'block';
@@ -1243,10 +1457,23 @@ $('#doRetryScriptBtn').addEventListener('click', async () => {
   $('#scriptActions').style.display = 'none';
 
   try {
+    const body = { ad_id: currentAdId };
+    if (feedback) body.feedback = feedback;
+    if (checkedDims.length) body.improve_dimensions = checkedDims;
+
     const res = await api(API + '/product-ad/' + currentAdId + '/retry-script', {
       method: 'POST',
-      body: JSON.stringify({ ad_id: currentAdId, feedback })
+      body: JSON.stringify(body)
     });
+
+    // 重新解析多版本状态
+    _scriptVariants = null;
+    if (res.script_variants) {
+      try { _scriptVariants = JSON.parse(res.script_variants); } catch {}
+    }
+    _selectedVariantIndex = 0;
+    _currentAdData = res;
+
     renderScriptPreview(res);
     _lastFetchedAd = res;
     showToast('剧本已重新生成', 'success');

@@ -115,6 +115,7 @@ class ProductInfoRequest(BaseModel):
     photo_ids: List[str] = Field(default_factory=list)  # 上传的图片文件名列表
     visual_style: str = "realistic"  # 动漫/真人
     showcase_style: str = "story"  # story（剧情带货）/ visual（视觉展示）
+    num_variants: int = Field(default=1, ge=1, le=3, description="生成变体数量（1-3），多版本时可对比选择")
     ad_id: Optional[int] = Field(default=None, description="复用已有草稿 ID，传此值则更新已有记录而非新建")
 
 class ProductAdScriptResponse(BaseModel):
@@ -129,6 +130,7 @@ class ProductAdScriptResponse(BaseModel):
     photo_ids: str
     review_score: Optional[float] = None
     review_detail: Optional[str] = None
+    script_variants: Optional[str] = None
     composite_confirmed: bool = False
     composite_photo_ids: Optional[str] = None
     composite_retry_count: int = 0
@@ -169,4 +171,11 @@ class CompositeConfirmRequest(BaseModel):
 
 class ScriptRetryRequest(BaseModel):
     ad_id: int
-    feedback: str = ""  # 用户补充要求
+    feedback: str = ""  # 用户补充要求（自由文本）
+    improve_dimensions: List[str] = Field(default_factory=list, description="用户勾选的改进维度列表")
+
+
+class ConfirmVariantRequest(BaseModel):
+    """确认选择某个剧本变体."""
+    ad_id: int
+    variant_index: int = Field(default=0, ge=0, description="选中的变体索引（0-based）")
