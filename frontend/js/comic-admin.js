@@ -1204,6 +1204,7 @@ function _renderSingleVariant(data, variantIndex) {
       <span style="color:var(--text-tertiary);font-size:0.82rem;">${scenes.length} 个场景</span>
     </div>
     ${scriptData.setting ? '<div style="margin-top:8px;font-size:0.85rem;color:var(--text-secondary);"><strong>场景设定：</strong>' + escHtml(scriptData.setting) + '</div>' : ''}
+    ${scriptData.background_music ? '<div style="margin-top:4px;font-size:0.85rem;color:var(--text-tertiary);"><strong>背景音乐：</strong>' + escHtml(scriptData.background_music) + '</div>' : ''}
     ${scriptData.cta ? '<div style="margin-top:4px;font-size:0.85rem;color:var(--gold-light);"><strong>CTA：</strong>' + escHtml(scriptData.cta) + '</div>' : ''}
   `;
 
