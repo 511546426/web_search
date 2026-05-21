@@ -298,9 +298,10 @@ VISUAL_REVIEW_SYSTEM = """你是一名抖音电商短视频内容评审专家，
 | visual_diversity | 高 | 景别/角度/运镜有明显变化，远中近特交替有节奏感 | 有变化但规律可预测，略显模板化 | 全程中景正面固定，监控摄像头式展示 |
 | scene_flow | 中 | 相邻镜头动作/视线/运镜方向自然衔接，有长镜头流畅感 | 衔接通顺但无亮点 | 镜头跳跃、动作断裂、方向矛盾 |
 | ai_executability | 中 | 所有描述具体可量化，Seedance 能直接理解并生成 | 大部分可执行，个别描述偏抽象 | 大量抽象/矛盾描述，AI 无法执行 |
+| shot_distribution | 高 | 全片最多 1 个特写（仅限第 1 镜），至少有 2 个全景，0 个内侧/微观镜头，每镜 1 个连续镜头 | 特写数量符合但缺少全景，或反之 | 超过 1 个特写、出现内侧视角、有微观手指级动作、多切镜拼接 |
 
 ## 评审原则
-- 6 分以上可生成视频，7.5 分以上建议直接发布
+- 8 分以上可生成视频，8.5 分以上建议直接发布
 - 评审必须尖锐、具体、可落地。不说「产品展示不够好」，说「第 3 镜只展示了大面积纯色面料，缺少版型/剪裁线条/缝线细节的信息输出」
 - 对「前 3 秒吸引力」要极严格——这是抖音，不是官网首页
 - 指出具体场景编号，而非笼统评价
@@ -321,7 +322,8 @@ VISUAL_REVIEW_SYSTEM = """你是一名抖音电商短视频内容评审专家，
     "product_persuasion": {"score": 7, "note": "具体评价"},
     "visual_diversity": {"score": 6, "note": "具体评价"},
     "scene_flow": {"score": 7, "note": "具体评价"},
-    "ai_executability": {"score": 8, "note": "具体评价"}
+    "ai_executability": {"score": 8, "note": "具体评价"},
+    "shot_distribution": {"score": 8, "note": "具体评价"}
   }
 }"""
 
@@ -342,12 +344,14 @@ VISUAL_REVISE_SYSTEM = """你是一名抖音电商短视频创意总监，擅长
 4. **信息密度翻倍**：每镜至少传达 2 个产品信息点（外观+质感、版型+垂坠、细节+工艺等组合）
 5. **打破模板感**：如果原始剧本景别单调（全中景），主动引入远/近/特交替；如果角度单调（全正面），引入侧/背/3/4 变化
 6. **AI 可执行**：所有描述具体到 Seedance 可直接理解——「柔光」改成「柔和漫射自然光，从左上方 45° 入射」，「高级感」改成「哑光微亮面料质感，无明显折痕」
-7. **不改变核心信息**：不改产品名称、品类、风格设定。**场景数量可以增减**以满足开场重构需要。
+7. **镜头分布合规（shot_distribution）**：如果 shot_distribution ≤ 7，必须严格执行——全片最多 1 个特写（仅限第 1 镜），至少 2 个全景，零内侧/微观镜头，每镜一个连续镜头
+8. **不改变核心信息**：不改产品名称、品类、风格设定。**场景数量可以增减**以满足开场重构需要。
 
 ## 修改优先级
 1. **前 3 秒钩子**（hook_strength ≤ 6 必须彻底替换第一镜，而非改写措辞）
-2. 信息密度（info_density ≤ 6 必须给每镜增加信息点）
-3. 视觉多样性（visual_diversity ≤ 6 必须重新分配景别/角度/运镜）
+2. **镜头分布合规**（shot_distribution ≤ 7 必须优先处理——减少特写、删内侧镜头、改微观动作为宏观动作）
+3. 信息密度（info_density ≤ 6 必须给每镜增加信息点）
+4. 视觉多样性（visual_diversity ≤ 6 必须重新分配景别/角度/运镜）
 4. 场景衔接和 AI 可执行性
 
 保持 JSON 结构不变，输出完整优化后的剧本 JSON，不得包含任何额外文字。"""
@@ -396,7 +400,7 @@ def revise_visual_script(script_data: Dict, review_result: Dict) -> Dict:
     return result
 
 
-def auto_review_loop_visual(script_data: Dict, max_iterations: int = 5, target_score: float = 7.0) -> Dict:
+def auto_review_loop_visual(script_data: Dict, max_iterations: int = 5, target_score: float = 8.5) -> Dict:
     """视觉展示剧本自动评审循环。
 
     无论首次评分是否达标，至少进行一轮修改+再评审。

@@ -131,6 +131,8 @@ class ProductAdScriptResponse(BaseModel):
     review_score: Optional[float] = None
     review_detail: Optional[str] = None
     script_variants: Optional[str] = None
+    video_path: Optional[str] = None
+    error_message: Optional[str] = None
     composite_confirmed: bool = False
     composite_photo_ids: Optional[str] = None
     composite_retry_count: int = 0

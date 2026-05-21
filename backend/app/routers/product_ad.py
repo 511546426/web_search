@@ -45,17 +45,17 @@ PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
 
 LOCATION_POOL = [
     "精品买手店二层阳光房，白色木窗框，窗外可见绿植，浅木色地板，米色亚麻沙发，龟背竹点缀",
-    "简约 loft 公寓，整面落地窗引入午后柔光，灰色微水泥墙面，金属线条吊灯，深色木质地板",
+    "简约 loft 办公室，整面落地窗引入午后柔光，灰色微水泥墙面，金属线条吊灯，深色木质地板，办公桌上有笔记本电脑和咖啡杯",
     "街角咖啡馆户外座位区，藤编椅子配大理石小圆桌，午后柔光透过浅色遮阳伞，地面铺着碎石子",
-    "大学校园梧桐大道，秋日午后斜阳穿过树叶洒在地面形成斑驳光影，远处可见红砖教学楼",
-    "现代艺术画廊白盒子空间，水泥自流平地面，极简轨道灯，大幅抽象画作作为背景",
-    "屋顶花园黄昏时分，城市天际线在暖金色光线中若隐若现，木质地板，低矮绿植环绕",
-    "日系杂货铺角落，暖黄灯光，木架上摆满手作器物，窗边挂着干燥花束，气氛安静治愈",
-    "健身房落地镜前区域，黑色橡胶地板，自然光从高位窗户洒入，器材作为背景虚化",
-    "地铁站台傍晚时分，暖色灯光与窗外深蓝天光交汇，列车驶过的动态模糊作为背景",
-    "文创园区红砖墙前，爬山虎覆盖半面墙，地面上有老工业遗留的铁轨痕迹",
-    "海边木栈道清晨，柔和晨光，远处海面波光粼粼，木质栏杆形成引导线构图",
-    "城市天台傍晚，远处高楼的灯光开始亮起，天边是深蓝到橙红的渐变色",
+    "高层写字楼大堂休息区，大理石地面，现代风格沙发组，落地玻璃幕墙外可见城市景观，午后的自然光从幕墙洒入",
+    "现代风格客厅，浅灰色布艺沙发，白色墙面配抽象装饰画，木地板上有几何图案地毯，落地窗引入柔和的自然光",
+    "高端酒店行政走廊休息区，暖色壁灯，地毯，皮沙发，窗外可见城市天际线",
+    "城市商业步行街，两旁有绿植和现代店铺橱窗，地面铺浅色石材，午后阳光透过行道树形成斑驳光影",
+    "社区公园长椅旁，草坪修整整齐，远处有儿童游乐设施，柔和自然光，氛围轻松日常",
+    "商务区露天咖啡座，简约白桌椅，灰色遮阳篷，周围是现代写字楼，背景有行人来往，光线明亮通透",
+    "精品酒店大堂休息区，大理石前台，现代艺术吊灯，组合沙发区，落地窗引入自然光，空间开阔明亮",
+    "城市滨河步道，木制栏杆，河面波光粼粼，远处可见城市建筑轮廓，傍晚柔光氛围恬静",
+    "家居买手店展示区，北欧风木质置物架，暖光吊灯，绿植点缀，生活气息浓厚",
 ]
 
 LIGHTING_POOL = [
@@ -83,11 +83,11 @@ CAMERA_STYLE_POOL = [
 OPENING_HOOK_POOL = [
     ("产品动态冲击：第一帧就是产品材质的动态瞬间——拉扯面料回弹/按压凹陷恢复/揉搓后抚平，让用户先看到产品最impressive的特性",
      "product_impact"),
-    ("细节揭示：开场即产品核心卖点的微距特写（面料经纬纹理/缝线走针/刺绣细节），0.3秒内快速拉远揭示全貌",
+    ("细节揭示：开场即产品核心卖点的区域特写（胸部面料纹理/肩部版型线条/袖口轮廓），0.3秒内快速拉远揭示全貌",
      "detail_reveal"),
     ("对比反差：两个不同状态的产品并置或快速切换（揉皱vs平整/暗光vs光照/正面vs侧面），用对比本身制造视觉冲击",
      "contrast_hook"),
-    ("面料质感特写：开场即面料在手指间揉捏/拉伸/飘动的微距慢动作，触感可视化",
+    ("面料质感特写：开场即大范围面料动态——拉伸回弹/飘动垂坠/自然褶皱恢复，触感可视化",
      "fabric_texture"),
     ("逆光轮廓冲击：模特侧身/3/4角度，逆光勾勒产品轮廓线条，第一帧用光影剪影吸引视线，0.3秒内转为正常曝光展示产品",
      "silhouette_reveal"),
@@ -507,10 +507,12 @@ Product info:
 CRITICAL RULES:
 1. **PRODUCT FIRST**: The product must be clearly visible in every scene. Lighting and setting must serve product clarity — the product's true colors, texture, and details must be accurately shown. Do NOT sacrifice visibility for atmosphere.
 2. Product features (product_focus) must reference actual features from the visual analysis.
-3. ALL scenes in ONE unified real-world location with good natural/soft lighting (NOT harsh direct sunlight, NOT dim). Prefer indoor or semi-indoor settings with diffused light (e.g. boutique store, art gallery, sunroom, loft, cafe, shopping mall atrium, rooftop garden at golden hour, modern showroom, hotel lobby with floor-to-ceiling windows). NEVER use plain/solid color backgrounds.
+3. ALL scenes in ONE unified real-world location — a place where people would naturally use/wear this product (e.g. office, coffee shop, living room, city street, park). NOT stage-like settings (art gallery, rooftop, beach boardwalk, photo studio). NEVER use plain/solid color backgrounds.
 4. **LOGO**: If the product has a visible brand logo/trademark, let it appear naturally on the product during regular shots. Do NOT dedicate a close-up just for the logo — avoid obvious label-pushing shots.
-5. **SCENE COHERENCE**: Adjacent scenes must flow naturally — action/movement/pose continuity, consistent gaze direction, coherent camera movement direction. Shot sizes must progress logically (wide→mid→close→mid→wide), never jumping more than 2 levels between adjacent scenes.
+5. **SCENE COHERENCE**: Adjacent scenes must flow naturally — action/movement/pose continuity, consistent gaze direction, coherent camera movement direction.
 6. Total video duration: ~15 seconds.
+7. **AI EXECUTABILITY**: All visual descriptions must be achievable by an AI video model. ONLY macro-level actions (walking, turning, standing, sitting, raising arms). NEVER describe finger-level micro-actions (flipping collar, turning button, picking thread, rubbing with fingers). Banned camera angles: inside collar, inside hem, inside pocket — AI cannot render these. Each scene = ONE continuous shot; no multi-cut within a scene.
+8. **SHOT DISTRIBUTION**: ONLY scene 1 may be a close-up. Scenes 2-7 MUST be medium or full-body shots. At least 2 full-body shots required. The final scene must NOT be a close-up.
 
 Style hint (LOW PRIORITY — lightly influence the shoot atmosphere only; the product visual analysis above is the primary creative driver, the setting must serve the product, not the style): {product.style_preference or 'None'}
 
@@ -590,6 +592,26 @@ def _generate_ad_script_variants(product: ProductInfoRequest, num_variants: int,
             logger.exception(f"Variant {idx} auto review failed")
             script["_review"] = None
             script["_review_score"] = None
+        # 镜头硬约束代码级校验（兜底：prompt 约束不可靠）
+        try:
+            violations = _validate_shot_constraints(script)
+            if violations:
+                logger.warning(f"Variant {idx} has {len(violations)} constraint violations: {[v['detail'][:40] for v in violations]}")
+                script = _fix_constraint_violations(script, violations)
+                # 再跑一次评审更新分数
+                if showcase == "visual":
+                    from app.services.script_writer import review_visual_script
+                    script["_review"] = review_visual_script(script)
+                else:
+                    from app.services.script_writer import review_script
+                    script["_review"] = review_script(script)
+                script["_review_score"] = script["_review"].get("overall_score")
+                # 再校验一次，仅记日志不反复修
+                remaining = _validate_shot_constraints(script)
+                if remaining:
+                    logger.warning(f"Variant {idx} still has {len(remaining)} violations after fix")
+        except Exception:
+            logger.exception(f"Variant {idx} constraint validation failed")
         script["_variant_label"] = variant_labels[idx]
         script["_variant_index"] = idx
         return script
@@ -603,6 +625,119 @@ def _generate_ad_script_variants(product: ProductInfoRequest, num_variants: int,
     variants.sort(key=lambda v: v.get("_variant_index", 0))
     logger.info(f"Generated {len(variants)} script variants")
     return variants, variant_labels
+
+
+# ==============================================================
+# 镜头约束后处理校验（代码级兜底，不依赖 LLM 自觉遵守）
+# ==============================================================
+
+_CLOSEUP_KEYWORDS = ["特写"]
+_BANNED_ANGLE_KEYWORDS = ["内侧", "内侧视角", "领口内", "下摆内", "口袋内"]
+_MICRO_ACTION_KEYWORDS = ["翻开", "翻起", "捏住", "捻", "指尖", "手指划过", "揉搓", "轻抚", "从喉结", "划过锁骨", "手指轻"]
+_MULTI_CUT_KEYWORDS = ["跳切", "三连切", "快速切换", "交替切", "连续切换"]
+
+
+def _validate_shot_constraints(script: dict) -> list:
+    """检查剧本的镜头分布硬约束，返回违规列表."""
+    violations = []
+    scenes = script.get("scenes", [])
+    if not scenes:
+        return violations
+
+    # 1. 特写数量：最多 1 个且仅限第 1 镜
+    closeup_scenes = []
+    for s in scenes:
+        angle = s.get("camera_angle", "") or ""
+        if any(kw in angle for kw in _CLOSEUP_KEYWORDS):
+            closeup_scenes.append(s["scene"])
+
+    if len(closeup_scenes) > 1:
+        violations.append({
+            "severity": "error",
+            "detail": f"全片有 {len(closeup_scenes)} 个特写（场景 {closeup_scenes}），最多允许 1 个特写且仅限第 1 镜"
+        })
+    if len(closeup_scenes) == 1 and closeup_scenes[0] != 1:
+        violations.append({
+            "severity": "error",
+            "detail": f"唯一的特写在场景 {closeup_scenes[0]}，不在第 1 镜"
+        })
+
+    # 2. 全景数量：至少 2 个
+    full_count = sum(1 for s in scenes if "全景" in (s.get("camera_angle", "") or ""))
+    if full_count < 2:
+        violations.append({
+            "severity": "error",
+            "detail": f"全片只有 {full_count} 个全景，至少需要 2 个全景"
+        })
+
+    # 3. 禁止的内侧/微观视角（同时检查 camera_angle 和 action）
+    for s in scenes:
+        angle = s.get("camera_angle", "") or ""
+        action = s.get("action", "") or ""
+        for kw in _BANNED_ANGLE_KEYWORDS:
+            if kw in angle or kw in action:
+                violations.append({
+                    "severity": "error",
+                    "detail": f"场景 {s['scene']} 包含禁止词「{kw}」: {action[:60] or angle[:60]}"
+                })
+
+    # 4. 禁止的手指级微观动作
+    for s in scenes:
+        action = s.get("action", "") or ""
+        for kw in _MICRO_ACTION_KEYWORDS:
+            if kw in action:
+                violations.append({
+                    "severity": "error",
+                    "detail": f"场景 {s['scene']} action 包含禁止微观动作「{kw}」: {action[:80]}"
+                })
+
+    # 5. 禁止的多镜头拼接
+    for s in scenes:
+        text = (s.get("action", "") or "") + (s.get("camera_angle", "") or "")
+        for kw in _MULTI_CUT_KEYWORDS:
+            if kw in text:
+                violations.append({
+                    "severity": "error",
+                    "detail": f"场景 {s['scene']} 包含禁止的多镜头拼接「{kw}」"
+                })
+                break
+
+    return violations
+
+
+def _fix_constraint_violations(script: dict, violations: list) -> dict:
+    """违反硬约束时，迭代修正直到全部合规（最多 3 轮）."""
+    from app.services.script_writer import revise_visual_script
+
+    current = dict(script)
+    for attempt in range(3):
+        detail_str = "\n".join(f"- {v['detail']}" for v in violations)
+        fix_review = {
+            "overall_score": 5.0,
+            "summary": f"第 {attempt+1} 轮修复：以下镜头分布违规必须全部修复，否则剧本不可用",
+            "weaknesses": [v["detail"] for v in violations],
+            "suggestions": [
+                "将多余的 close-up 改为 medium shot 或 full shot，只保留第 1 镜为 close-up",
+                "确保至少 2 个全景镜头（模特全身从头到脚完整出镜）",
+                "删除所有内侧视角和微观动作描述，改为宏观动作",
+                "每镜保持一个连续镜头，删除所有多镜头拼接",
+            ],
+            "ready_for_video": False,
+            "dimensions": {
+                "shot_distribution": {"score": 3, "note": detail_str[:200]}
+            }
+        }
+        current = revise_visual_script(current, fix_review)
+        # 重新验证
+        remaining = _validate_shot_constraints(current)
+        if not remaining:
+            logger.info(f"Constraint fix全部合规 (attempt {attempt+1})")
+            return current
+        violations = remaining
+        logger.warning(f"Constraint fix第 {attempt+1} 轮后仍有 {len(remaining)} 条违规，继续修正")
+    # 3 轮后仍有违规，记录日志但接受结果
+    logger.warning(f"Constraint fix 3 轮后仍有 {len(violations)} 条违规未修复")
+    return current
 
 
 def _build_dimension_feedback_prompt(improve_dimensions: list, current_dimension_scores: dict = None) -> str:
@@ -688,20 +823,27 @@ def _build_visual_system_prompt(product, style_note, creative_params=None):
 - **必须**：第一帧就是产品的高信息量画面——面料动态特写/版型对比/产品回弹/细节冲击
 - 开场方式 '{opening_hook}' 必须被实现，但不能牺牲产品信息的传达
 
-## 删除所有"过渡性动作"
-- 删除：行走、转身、坐下、起身、整理衣服、走向某处、手搭在某处
-- 除非这些动作本身在展示产品卖点（如"转身时面料飘动展示垂坠感"可以保留，但"模特转身走向天台边缘"必须删除）
+## 景别分布硬约束（极其重要，优先级高于所有其他要求）
+- **🚫 全片最多只有第 1 镜可以是特写/微距**，第 2~7 镜全部必须是中景或全景。最后收尾镜禁止特写。
+- **✅ 至少 2 个场景必须是全景**（模特全身从头到脚完整出镜），至少 2 个场景必须是中景（膝盖以上）。
+- 景别递进逻辑：特写(第1镜钩子) → 中景(2~3信任) → 全景(4~5欲望) → 中景(6~7收尾)
+- **违反此规则的剧本将被直接淘汰**。
+- 每个场景 = 一个连续镜头，禁止在同一场景内写"三连切""跳切""快速切换"等多镜头拼接。
+
+## AI 可执行性 — 所有描述必须在 AI 视频模型能力范围内
+- **禁止**：手指级微操（翻开领口、翻转纽扣、翻开下摆、手指从喉结划到锁骨、指尖捏住某物、揉搓面料、手指划过某处）
+- **禁止**：身体特殊视角（领口内侧、下摆内侧、口袋内部），AI 视频模型无法生成这些视角
+- **允许**：宏观动作（自然站立、行走、转身、抬手、坐下、整理袖口、手插兜）
+- **特写的定义**：特写以大部位为载体（胸部面料纹理、袖口区域褶皱、肩部缝线），不能是手指/纽扣级别
 - 每个镜头的 action 必须直接服务于该镜的 product_focus
 
-## 镜头多样性格要求（极其重要，对抗模板化）
-- 景别必须多样化：远中近特必须交替使用，禁止连续 3 个以上同景别
-- 角度必须有变化：正面/侧面/背面/3-4 角度/低角度/高角度至少使用 4 种
+## 镜头多样性格要求（在中景/全景范围内实现）
+- 角度必须有变化（均在中景/全景内）：正面/侧面/背面/3-4 角度/低角度/高角度至少使用 4 种
 - 运镜必须有节奏：固定/推近/环绕/跟随/升降至少使用 3 种，按照上述指定运镜风格的节奏来分配
-- 每镜的 camera_angle 必须明确写出景别+角度+运镜三者（如"中景，3/4 侧面，缓慢推近"）
+- 每镜的 camera_angle 必须写出角度+运镜（如"3/4 侧面，缓慢推近"）。注意：不用写景别，因为大多已是中景/全景。
 
 ## 镜头连贯性
 - 相邻场景动作/视线/运镜方向衔接自然
-- 景别递进不超过两级（远→中→近→特→中→远）
 - 最后一镜必须是倒数第二镜动作的自然延伸
 
 ## 模特出镜要求
@@ -935,6 +1077,24 @@ def retry_ad_script(ad_id: int, body: ScriptRetryRequest = None, db: Session = D
         ad.review_detail = json.dumps(loop_result["review"], ensure_ascii=False)
     except Exception:
         logger.exception(f"Auto review failed for ad retry {ad_id}")
+
+    # 镜头硬约束校验 + 修正
+    try:
+        violations = _validate_shot_constraints(script_data)
+        if violations:
+            logger.warning(f"Retry ad {ad_id}: {len(violations)} constraint violations, fixing")
+            script_data = _fix_constraint_violations(script_data, violations)
+            # 重新评审更新分数
+            if script_data.get("showcase_style", "visual") == "visual":
+                from app.services.script_writer import review_visual_script
+                script_data["_review"] = review_visual_script(script_data)
+            else:
+                from app.services.script_writer import review_script
+                script_data["_review"] = review_script(script_data)
+            ad.review_score = script_data["_review"].get("overall_score")
+            ad.review_detail = json.dumps(script_data["_review"], ensure_ascii=False)
+    except Exception:
+        logger.exception(f"Constraint validation failed for retry ad {ad_id}")
 
     ad.script_content = json.dumps(script_data, ensure_ascii=False)
     ad.script_confirmed = False
